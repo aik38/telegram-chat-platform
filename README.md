@@ -12,3 +12,14 @@ pip install -r requirements.txt
 
 - Bot 起動: `python -m bot.main`
 - API 起動: `uvicorn api.main:app --reload --port 8000`
+# akolasia_tarot_bot 起動メモ
+
+## セットアップ
+cd "%USERPROFILE%\OneDrive\デスクトップ\telegram-tarot-bot"
+.\.venv\Scripts\Activate
+pip install -r requirements.txt
+
+## 起動
+cd "%USERPROFILE%\OneDrive\デスクトップ\telegram-tarot-bot"
+.\.venv\Scripts\Activate
+python -m bot.main
