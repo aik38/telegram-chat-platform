@@ -116,6 +116,31 @@ def test_start_message_shorter(monkeypatch, tmp_path):
 
     assert message.answers
     assert "【占いの始め方】" in message.answers[0]
+    assert "/read1" in message.answers[0]
+    assert "/read3" in message.answers[0]
+    assert "恋愛専用" not in message.answers[0]
+
+
+def test_love1_command_is_alias(monkeypatch, tmp_path):
+    bot_main = import_bot_main(monkeypatch, tmp_path)
+
+    calls: list[tuple[str, object]] = []
+
+    async def fake_handle_tarot(message, user_query: str, spread, guidance_note=None):
+        calls.append((user_query, spread))
+
+    monkeypatch.setattr(bot_main, "handle_tarot_reading", fake_handle_tarot)
+
+    message_love = DummyMessage("/love1", user_id=10)
+    asyncio.run(bot_main.handle_message(message_love))
+
+    message_read = DummyMessage("/read1", user_id=11)
+    asyncio.run(bot_main.handle_message(message_read))
+
+    assert len(calls) == 2
+    assert calls[0][0] == calls[1][0]
+    assert calls[0][1] is bot_main.ONE_CARD
+    assert calls[1][1] is bot_main.ONE_CARD
 
 
 def test_multiple_card_hint_without_command(monkeypatch, tmp_path):
