@@ -35,6 +35,7 @@ cd "%USERPROFILE%\OneDrive\デスクトップ\telegram-tarot-bot"
 .\.venv\Scripts\Activate
 python -m bot.main
 
+###　Codexで修正後のプル・プッシュ
 cd "$env:USERPROFILE\OneDrive\デスクトップ\telegram-tarot-bot"; `
 git pull --rebase origin main; `
 git add .; `
