@@ -1,7 +1,8 @@
 import asyncio
+import json
 import logging
 import random
-from typing import Tuple
+from typing import Iterable
 
 from aiogram import Bot, Dispatcher
 from aiogram.filters import CommandStart
@@ -19,6 +20,13 @@ from openai import (
 
 from core.config import OPENAI_API_KEY, TELEGRAM_BOT_TOKEN
 from core.logging import setup_logging
+from core.tarot import (
+    ONE_CARD,
+    THREE_CARD_SITUATION,
+    draw_cards,
+    orientation_label,
+)
+from core.tarot.spreads import Spread
 
 
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
@@ -28,56 +36,25 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 logger = logging.getLogger(__name__)
 
 
-def categorize_question(text: str) -> str:
-    lowered = text.lower()
-    categories = {
-        "恋愛": ["恋愛", "彼氏", "彼女", "片思い", "結婚", "離婚", "パートナー", "恋人"],
-        "仕事": ["仕事", "転職", "会社", "上司", "同僚", "キャリア", "職場", "昇進"],
-        "金運": ["お金", "収入", "貯金", "投資", "ビジネス", "副業", "金運", "財"],
-        "全体運": ["今日", "明日", "1日", "運勢", "ラッキー", "全体", "1 日", "今週"],
-    }
-
-    for category, keywords in categories.items():
-        if any(keyword.lower() in lowered for keyword in keywords):
-            return category
-    return "その他"
-
-
-def build_system_prompt(category: str) -> str:
-    # 返答トーンのガイドラインを system メッセージに含め、
-    # 「優しく・断定しない・選択肢を提案する」スタンスを徹底する。
-    tone_guide = (
-        "# 返答トーンのガイドライン\n"
-        "- 優しく、フレンドリーだが馴れ馴れしすぎない。\n"
-        "- 「絶対」「必ず」を避け、「可能性」「かもしれません」を使う。\n"
-        "- まず相談者の気持ちを受け止めてからカード結果を伝える。\n"
-        "- 行動を強要せず、複数の選択肢や提案を示す。\n"
+def build_general_chat_messages(user_query: str) -> list[dict[str, str]]:
+    """通常チャットモードの system prompt を組み立てる。"""
+    system_prompt = (
+        "あなたは日本語で会話する優しいチャットパートナーです。"
+        "次の禁止事項を必ず守ってください:\n"
+        "- 通常チャットモードでは、タロットカードを引いたふりをしてはいけません。\n"
+        "- 『カード』『タロット』『スプレッド』『大アルカナ』『小アルカナ』などの占い用語を使わないでください。\n"
+        "- 占いのような断定的未来予測は避け、相談者の気持ちを受け止めるカウンセリング寄りの返答にしてください。\n"
+        "- 返信は300〜600文字程度を目安に、落ち着いて丁寧なトーンを保ってください。\n"
+        "- 重たい相談にも寄り添い、相手を責めずに安心できる表現を選んでください。"
     )
-
-    common = (
-        "あなたは優しい日本語で占うタロット占い師です。"
-        "カードの結果は断定せず、相談者の気持ちを尊重して伝えてください。"
-        "スプレッドやカード名は必要に応じて簡潔に触れ、日常生活で活かせる提案を添えます。"
-    )
-
-    category_prompts = {
-        "恋愛": "恋愛やパートナーシップについて、感情面に寄り添いながら前向きなヒントを伝えてください。",
-        "仕事": "仕事やキャリアの相談では、現実的で実行しやすいアドバイスを意識してください。",
-        "金運": "お金や収入の相談では、無理のない工夫やリスクへの注意喚起を優しく添えてください。",
-        "全体運": "全体運や今日・明日の運勢では、日常で試しやすい小さな行動の提案を添えてください。",
-        "その他": "相談内容に合わせて、心を整えるヒントや次の一歩を優しく提案してください。",
-    }
-
-    return f"{tone_guide}\n{common}{category_prompts.get(category, '')}"
-
-
-async def call_openai_with_retry(user_text: str, category: str) -> Tuple[str, bool]:
-    system_prompt = build_system_prompt(category)
-    messages = [
+    return [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_text},
+        {"role": "user", "content": user_query},
     ]
 
+
+async def call_openai_with_retry(messages: Iterable[dict[str, str]]) -> tuple[str, bool]:
+    prepared_messages = list(messages)
     max_attempts = 3
     base_delay = 1.5
 
@@ -86,7 +63,7 @@ async def call_openai_with_retry(user_text: str, category: str) -> Tuple[str, bo
             completion = await asyncio.get_running_loop().run_in_executor(
                 None,
                 lambda: client.chat.completions.create(
-                    model="gpt-4o-mini", messages=messages
+                    model="gpt-4o-mini", messages=prepared_messages
                 ),
             )
             answer = completion.choices[0].message.content
@@ -143,6 +120,43 @@ def _preview_text(text: str, limit: int = 80) -> str:
     return text[:limit] + "..."
 
 
+def is_tarot_mode(text: str) -> bool:
+    lowered = text.lower()
+    return "占って" in text or lowered.startswith("/tarot")
+
+
+def choose_spread(user_query: str) -> Spread:
+    hints = ["3枚", "３枚", "三枚", "3card", "3 カード"]
+    if any(hint in user_query for hint in hints):
+        return THREE_CARD_SITUATION
+    return ONE_CARD
+
+
+def build_tarot_messages(
+    *, spread: Spread, user_query: str, drawn_cards: list[dict[str, str]]
+) -> list[dict[str, str]]:
+    tarot_system_prompt = (
+        "あなたは日本語で回答するタロット占い師です。"
+        "以下のカード情報を必ず先に列挙し、各ポジション名とカード名・正逆を明示してから解釈を述べてください。\n"
+        "- 与えられたカード以外を勝手に作らないこと。\n"
+        "- 必ず『引いたカードは次の通りです』のような導入を入れ、ポジション順にカード名と正位置/逆位置を示すこと。\n"
+        "- その後で質問内容に沿って、カードのキーワードを活かしながら優しく解釈してください。"
+    )
+
+    tarot_payload = {
+        "spread_id": spread.id,
+        "spread_name_ja": spread.name_ja,
+        "positions": drawn_cards,
+        "user_question": user_query,
+    }
+
+    return [
+        {"role": "system", "content": tarot_system_prompt},
+        {"role": "assistant", "content": json.dumps(tarot_payload, ensure_ascii=False, indent=2)},
+        {"role": "user", "content": user_query},
+    ]
+
+
 @dp.message(CommandStart())
 async def cmd_start(message: Message) -> None:
     await message.answer(
@@ -178,10 +192,43 @@ async def handle_tarot_reading(message: Message, user_query: str) -> None:
         },
     )
 
-    category = categorize_question(user_query)
+    spread = choose_spread(user_query)
+    rng = random.Random()
+    drawn = draw_cards(spread, rng=rng)
+
+    drawn_payload: list[dict[str, str]] = []
+    position_lookup = {pos.id: pos for pos in spread.positions}
+    for item in drawn:
+        position = position_lookup[item.position_id]
+        keywords = (
+            item.card.keywords_reversed_ja
+            if item.is_reversed
+            else item.card.keywords_upright_ja
+        )
+        drawn_payload.append(
+            {
+                "id": position.id,
+                "label_ja": position.label_ja,
+                "meaning_ja": position.meaning_ja,
+                "card": {
+                    "id": item.card.id,
+                    "name_ja": item.card.name_ja,
+                    "name_en": item.card.name_en,
+                    "orientation": "reversed" if item.is_reversed else "upright",
+                    "orientation_label_ja": orientation_label(item.is_reversed),
+                    "keywords_ja": list(keywords),
+                },
+            }
+        )
+
+    messages = build_tarot_messages(
+        spread=spread,
+        user_query=user_query,
+        drawn_cards=drawn_payload,
+    )
 
     try:
-        answer, fatal = await call_openai_with_retry(user_query, category)
+        answer, fatal = await call_openai_with_retry(messages)
     except Exception:
         logger.exception("Unexpected error during tarot reading")
         await message.answer(
@@ -210,26 +257,14 @@ async def handle_general_chat(message: Message, user_query: str) -> None:
         },
     )
 
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "あなたは日本語で会話する優しいチャットパートナーです。"
-                "ユーザーの日常の悩みや雑談に、落ち着いて丁寧に答えてください。"
-                "タロット占いをしてほしいときは、ユーザーがメッセージの中に『占って』という言葉を書きます。"
-                "そのキーワードがない限り、タロットカードを引いたり、占い結果をねつ造したりしないでください。"
-                "相談内容が重いときも、相手を責めずに気持ちに寄り添う表現を使ってください。"
-                "返答は通常のタロットより少し短め（300〜600文字程度）を目安にしてください。"
-            ),
-        },
-        {"role": "user", "content": user_query},
-    ]
-
     try:
-        completion = await asyncio.get_running_loop().run_in_executor(
-            None, lambda: client.chat.completions.create(model="gpt-4o-mini", messages=messages)
-        )
-        answer = completion.choices[0].message.content
+        answer, fatal = await call_openai_with_retry(build_general_chat_messages(user_query))
+        if fatal:
+            await message.answer(
+                answer
+                + "\n\nご不便をおかけしてごめんなさい。時間をおいて再度お試しください。"
+            )
+            return
         await message.answer(answer)
     except Exception:
         logger.exception("Unexpected error during general chat")
@@ -252,7 +287,7 @@ async def handle_message(message: Message) -> None:
         )
         return
 
-    if "占って" in text:
+    if is_tarot_mode(text):
         await handle_tarot_reading(message, user_query=text)
     else:
         await handle_general_chat(message, user_query=text)
