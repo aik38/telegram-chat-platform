@@ -19,11 +19,14 @@ from openai import (
 )
 
 from core.config import OPENAI_API_KEY, TELEGRAM_BOT_TOKEN
+from core.monetization import PAYWALL_ENABLED, is_premium_user
 from core.logging import setup_logging
 from core.prompts import CHAT_SYSTEM_PROMPT, TAROT_OUTPUT_RULES, TAROT_SYSTEM_PROMPT
 from core.tarot import (
     ONE_CARD,
     THREE_CARD_SITUATION,
+    HEXAGRAM,
+    CELTIC_CROSS,
     contains_tarot_like,
     draw_cards,
     is_tarot_request,
@@ -115,11 +118,44 @@ def _preview_text(text: str, limit: int = 80) -> str:
     return text[:limit] + "..."
 
 
-def choose_spread(user_query: str) -> Spread:
-    hints = ["3枚", "３枚", "三枚", "3card", "3 カード"]
-    if any(hint in user_query for hint in hints):
-        return THREE_CARD_SITUATION
+COMMAND_SPREAD_MAP: dict[str, Spread] = {
+    "/love1": ONE_CARD,
+    "/love3": THREE_CARD_SITUATION,
+    "/hexa": HEXAGRAM,
+    "/celtic": CELTIC_CROSS,
+}
+
+
+PAID_SPREAD_IDS: set[str] = {THREE_CARD_SITUATION.id, HEXAGRAM.id, CELTIC_CROSS.id}
+
+
+def choose_spread(_: str) -> Spread:
     return ONE_CARD
+
+
+def parse_spread_command(text: str) -> tuple[Spread | None, str]:
+    if not text:
+        return None, ""
+
+    parts = text.split(maxsplit=1)
+    command = parts[0].lower()
+    spread = COMMAND_SPREAD_MAP.get(command)
+    if not spread:
+        return None, text
+
+    remainder = parts[1].strip() if len(parts) > 1 else ""
+    return spread, remainder
+
+
+def is_paid_spread(spread: Spread) -> bool:
+    return spread.id in PAID_SPREAD_IDS
+
+
+def build_paid_hint(text: str) -> str | None:
+    hints = ["3枚", "３枚", "三枚", "3card", "3 カード", "ヘキサ", "ケルト", "十字", "7枚", "７枚", "10枚", "１０枚"]
+    if any(hint in text for hint in hints):
+        return "3枚以上のスプレッドはコマンド指定で受け付けています：/love3 /hexa /celtic（無料は1枚引きです：/love1）。"
+    return None
 
 
 def build_tarot_messages(
@@ -217,7 +253,8 @@ async def cmd_start(message: Message) -> None:
         "・『明日の恋人の機嫌はどうかな？』\n"
         "・『転職した方が良いか迷っています』\n"
         "・『最近、何となく気持ちが落ち着きません』\n"
-        "・『占って』とメッセージに入れるとタロット占いモードになります\n"
+        "・『占って』とメッセージに入れるとタロット占いモードになります（1枚引き）\n"
+        "・複数枚スプレッドはコマンドで指定してください：/love3 /hexa /celtic（無料は /love1）\n"
         "・それ以外のメッセージには、いつもの雑談や相談相手としてお話しします\n\n"
         "◆ やさしいお願い\n"
         "医療・法律・投資の判断は専門家に相談してください。\n"
@@ -226,7 +263,13 @@ async def cmd_start(message: Message) -> None:
     )
 
 
-async def handle_tarot_reading(message: Message, user_query: str) -> None:
+async def handle_tarot_reading(
+    message: Message,
+    user_query: str,
+    *,
+    spread: Spread | None = None,
+    guidance_note: str | None = None,
+) -> None:
     logger.info(
         "Handling message",
         extra={
@@ -236,12 +279,12 @@ async def handle_tarot_reading(message: Message, user_query: str) -> None:
         },
     )
 
-    spread = choose_spread(user_query)
+    spread_to_use = spread or choose_spread(user_query)
     rng = random.Random()
-    drawn = draw_cards(spread, rng=rng)
+    drawn = draw_cards(spread_to_use, rng=rng)
 
     drawn_payload: list[dict[str, str]] = []
-    position_lookup = {pos.id: pos for pos in spread.positions}
+    position_lookup = {pos.id: pos for pos in spread_to_use.positions}
     for item in drawn:
         position = position_lookup[item.position_id]
         keywords = (
@@ -267,7 +310,7 @@ async def handle_tarot_reading(message: Message, user_query: str) -> None:
 
     heading = format_drawn_card_heading(drawn_payload)
     messages = build_tarot_messages(
-        spread=spread,
+        spread=spread_to_use,
         user_query=user_query,
         drawn_cards=drawn_payload,
     )
@@ -290,6 +333,8 @@ async def handle_tarot_reading(message: Message, user_query: str) -> None:
         return
 
     safe_answer = ensure_tarot_response_prefixed(answer, heading)
+    if guidance_note:
+        safe_answer = f"{safe_answer}\n\n{guidance_note}"
     await message.answer(safe_answer)
 
 
@@ -334,8 +379,31 @@ async def handle_message(message: Message) -> None:
         )
         return
 
+    spread_from_command, cleaned = parse_spread_command(text)
+    user_id = message.from_user.id if message.from_user else None
+
+    if spread_from_command:
+        if PAYWALL_ENABLED and is_paid_spread(spread_from_command) and not is_premium_user(user_id):
+            await message.answer(
+                "こちらは有料会員向けメニューです。アップグレード方法は準備中です（今は無料の1枚引きなら可能です：/love1）。"
+            )
+            return
+
+        user_query = cleaned or "恋愛について占ってください。"
+        await handle_tarot_reading(
+            message,
+            user_query=user_query,
+            spread=spread_from_command,
+        )
+        return
+
     if is_tarot_request(text):
-        await handle_tarot_reading(message, user_query=text)
+        guidance_note = build_paid_hint(text)
+        await handle_tarot_reading(
+            message,
+            user_query=text,
+            guidance_note=guidance_note,
+        )
     else:
         await handle_general_chat(message, user_query=text)
 
