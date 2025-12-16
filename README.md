@@ -34,3 +34,9 @@ pip install -r requirements.txt
 cd "%USERPROFILE%\OneDrive\デスクトップ\telegram-tarot-bot"
 .\.venv\Scripts\Activate
 python -m bot.main
+
+cd "$env:USERPROFILE\OneDrive\デスクトップ\telegram-tarot-bot"; `
+git pull --rebase origin main; `
+git add .; `
+git commit -m "Update tarot bot from local"; `
+git push origin main
