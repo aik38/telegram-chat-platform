@@ -43,6 +43,7 @@ from core.db import (
     log_payment,
     mark_payment_refunded,
     set_terms_accepted,
+    set_last_general_chat_block_notice,
     USAGE_TIMEZONE,
 )
 from core.monetization import (
@@ -84,6 +85,7 @@ IMAGE_ADDON_ENABLED = os.getenv("IMAGE_ADDON_ENABLED", "false").strip().lower() 
     "yes",
     "on",
 }
+GENERAL_CHAT_BLOCK_NOTICE_COOLDOWN = timedelta(hours=1)
 
 
 def _usage_today(now: datetime) -> datetime.date:
@@ -318,7 +320,8 @@ def get_store_intro_text() -> str:
         "・迷ったら：スリーカード(3枚)かケルト十字(10枚)でじっくり整理\n"
         "・相談重視：7日/30日パスで相談チャットを解放\n"
         "・決済はTelegram Stars (XTR) です。ゆっくりお進みください。\n"
-        "・価格は選択後に表示されます。"
+        "・価格（⭐️）は各メニューのボタンに表示されています。\n"
+        "・選択すると購入確認が表示されます。"
     )
 
 
@@ -567,7 +570,7 @@ def build_store_keyboard() -> InlineKeyboardMarkup:
             rows.append(
                 [
                     InlineKeyboardButton(
-                        text="画像追加オプション（準備中）",
+                        text=f"画像追加オプション（準備中） - {product.price_stars}⭐️",
                         callback_data="addon:pending",
                     )
                 ]
@@ -576,7 +579,8 @@ def build_store_keyboard() -> InlineKeyboardMarkup:
         rows.append(
             [
                 InlineKeyboardButton(
-                    text=product.title, callback_data=f"buy:{product.sku}"
+                    text=f"{product.title} - {product.price_stars}⭐️",
+                    callback_data=f"buy:{product.sku}"
                 )
             ]
         )
@@ -900,22 +904,57 @@ async def handle_tarot_reading(
     await message.answer(safe_answer)
 
 
+def _is_consult_intent(text: str) -> bool:
+    return text.startswith("相談:") or text.startswith("相談：")
+
+
+def _should_show_general_chat_full_notice(user: UserRecord, now: datetime) -> bool:
+    if not user.last_general_chat_block_notice_at:
+        return True
+    return (now - user.last_general_chat_block_notice_at) >= GENERAL_CHAT_BLOCK_NOTICE_COOLDOWN
+
+
+def _build_consult_block_message(*, trial_active: bool, short: bool = False) -> str:
+    if trial_active:
+        if short:
+            return "ご相談は本日の無料枠を使い切りました。パスは /buy からご利用いただけます。"
+        return (
+            "trial中の相談チャット無料枠（1日2通）は本日分を使い切りました。\n"
+            "/buy から7日/30日パスを購入すると回数無制限でご利用いただけます。"
+        )
+    if short:
+        return "相談チャットはパス専用です。/buy からご検討ください。"
+    return "6日目以降の相談チャットはパス専用です。/buy から7日または30日のパスをご検討ください。"
+
+
 async def handle_general_chat(message: Message, user_query: str) -> None:
     now = utcnow()
     user_id = message.from_user.id if message.from_user else None
-    if user_id is not None:
-        user = ensure_user(user_id, now=now)
-        if _is_in_general_chat_trial(user, now):
-            if user.general_chat_count_today >= FREE_GENERAL_CHAT_PER_DAY:
+    consult_intent = _is_consult_intent(user_query)
+    user: UserRecord | None = ensure_user(user_id, now=now) if user_id is not None else None
+
+    if user is not None:
+        trial_active = _is_in_general_chat_trial(user, now)
+        out_of_quota = user.general_chat_count_today >= FREE_GENERAL_CHAT_PER_DAY
+        has_pass = has_active_pass(user_id, now=now)
+
+        if (trial_active and out_of_quota) or (not trial_active and not has_pass):
+            if not consult_intent:
                 await message.answer(
-                    "trial中の相談チャット無料枠（1日2通）は本日分を使い切りました。\n"
-                    "/buy から7日/30日パスを購入すると回数無制限でご利用いただけます。"
+                    "ご連絡ありがとうございます。ご相談は本日の無料枠を使い切りました。"
+                    "占いは /read1 や『〇〇占って』でいつでもどうぞ。"
+                    "ご相談を続ける場合は /buy からパスをご利用ください。"
                 )
                 return
-        elif not has_active_pass(user_id, now=now):
-            await message.answer(
-                "6日目以降の相談チャットはパス専用です。/buy から7日または30日のパスをご検討ください。"
+
+            full_notice = _should_show_general_chat_full_notice(user, now)
+            block_message = _build_consult_block_message(
+                trial_active=trial_active, short=not full_notice
             )
+            reply_markup = build_store_keyboard() if full_notice else None
+            await message.answer(block_message, reply_markup=reply_markup)
+            if full_notice and user_id is not None:
+                set_last_general_chat_block_notice(user_id, now=now)
             return
 
         increment_general_chat_count(user_id, now=now)
