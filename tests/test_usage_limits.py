@@ -53,6 +53,33 @@ def test_general_chat_trial_limits(monkeypatch, tmp_path):
     assert any("無料枠" in ans for ans in third.answers)
 
 
+def test_general_chat_block_notice_cooldown(monkeypatch, tmp_path):
+    bot_main = import_bot_main(monkeypatch, tmp_path)
+    base = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    monkeypatch.setattr(bot_main, "utcnow", lambda: base)
+
+    async def fake_call(messages):
+        return "hi", False
+
+    monkeypatch.setattr(bot_main, "call_openai_with_retry", fake_call)
+
+    first = DummyMessage("相談: 1通目", user_id=2)
+    second = DummyMessage("相談: 2通目", user_id=2)
+    third = DummyMessage("相談: 3通目", user_id=2)
+    fourth = DummyMessage("相談: 4通目", user_id=2)
+
+    asyncio.run(bot_main.handle_message(first))
+    asyncio.run(bot_main.handle_message(second))
+    asyncio.run(bot_main.handle_message(third))
+    asyncio.run(bot_main.handle_message(fourth))
+
+    assert len(third.answers) == 1
+    assert len(fourth.answers) == 1
+    assert any("trial中の相談チャット無料枠" in ans for ans in third.answers)
+    assert any("パス専用" not in ans for ans in fourth.answers)
+    assert third.answers[0] != fourth.answers[0]
+
+
 def test_general_chat_requires_pass_after_trial(monkeypatch, tmp_path):
     bot_main = import_bot_main(monkeypatch, tmp_path)
     base = datetime(2024, 1, 1, tzinfo=timezone.utc)

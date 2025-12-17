@@ -32,6 +32,7 @@ class UserRecord:
     general_chat_count_today: int
     one_oracle_count_today: int
     usage_date: date | None
+    last_general_chat_block_notice_at: datetime | None
 
 
 @dataclass
@@ -86,7 +87,8 @@ def init_db() -> None:
                 tickets_7 INT,
                 tickets_10 INT,
                 images_enabled INT,
-                terms_accepted_at TEXT
+                terms_accepted_at TEXT,
+                last_general_chat_block_notice_at TEXT
             )
             """
         )
@@ -122,6 +124,10 @@ def init_db() -> None:
         if not _column_exists(conn, "users", "one_oracle_count_today"):
             conn.execute(
                 "ALTER TABLE users ADD COLUMN one_oracle_count_today INT DEFAULT 0"
+            )
+        if not _column_exists(conn, "users", "last_general_chat_block_notice_at"):
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN last_general_chat_block_notice_at TEXT"
             )
 
         if not _column_exists(conn, "payments", "status"):
@@ -169,9 +175,10 @@ def ensure_user(user_id: int, *, now: datetime | None = None) -> UserRecord:
                 tickets_7,
                 tickets_10,
                 images_enabled,
-                terms_accepted_at
+                terms_accepted_at,
+                last_general_chat_block_notice_at
             )
-            VALUES (?, ?, NULL, NULL, ?, ?, 0, 0, 0, 0, 0, 0, NULL)
+            VALUES (?, ?, NULL, NULL, ?, ?, 0, 0, 0, 0, 0, 0, NULL, NULL)
             """,
             (user_id, now.isoformat(), now.isoformat(), usage_today.isoformat()),
         )
@@ -189,6 +196,7 @@ def ensure_user(user_id: int, *, now: datetime | None = None) -> UserRecord:
             general_chat_count_today=0,
             one_oracle_count_today=0,
             usage_date=usage_today,
+            last_general_chat_block_notice_at=None,
         )
 
 
@@ -290,6 +298,8 @@ def _row_to_user(row: sqlite3.Row) -> UserRecord:
     first_seen_dt = datetime.fromisoformat(first_seen_raw)
     usage_date_raw = row["usage_date"]
     usage_date = date.fromisoformat(usage_date_raw) if usage_date_raw else None
+    last_notice_raw = row["last_general_chat_block_notice_at"]
+    last_notice_dt = datetime.fromisoformat(last_notice_raw) if last_notice_raw else None
     return UserRecord(
         user_id=row["user_id"],
         created_at=datetime.fromisoformat(row["created_at"]),
@@ -304,6 +314,7 @@ def _row_to_user(row: sqlite3.Row) -> UserRecord:
         general_chat_count_today=row["general_chat_count_today"],
         one_oracle_count_today=row["one_oracle_count_today"],
         usage_date=usage_date,
+        last_general_chat_block_notice_at=last_notice_dt,
     )
 
 
@@ -412,9 +423,22 @@ def set_terms_accepted(user_id: int, *, now: datetime | None = None) -> UserReco
     return get_user(user_id)  # type: ignore[return-value]
 
 
+def set_last_general_chat_block_notice(
+    user_id: int, *, now: datetime | None = None
+) -> UserRecord:
+    now = now or datetime.now(timezone.utc)
+    ensure_user(user_id, now=now)
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE users SET last_general_chat_block_notice_at = ? WHERE user_id = ?",
+            (now.isoformat(), user_id),
+        )
+    return get_user(user_id)  # type: ignore[return-value]
+
+
 def has_active_pass(user_id: int, *, now: datetime | None = None) -> bool:
     now = now or datetime.now(timezone.utc)
-    user = get_user(user_id)
+    user = get_user(user_id, now=now)
     if not user:
         return False
     if user.pass_until:
@@ -445,15 +469,18 @@ def _increment_daily_count(
         row = conn.execute("SELECT * FROM users WHERE user_id = ?", (user_id,)).fetchone()
         if row is None:
             raise ValueError("User must exist to increment usage counters")
-        today = _usage_date(now).isoformat()
+        today = _usage_date(now)
+        last_usage_raw = row["usage_date"]
+        last_usage = date.fromisoformat(last_usage_raw) if last_usage_raw else None
+        new_count = (row[column] + 1) if last_usage == today else 1
         conn.execute(
             f"""
             UPDATE users
             SET usage_date = ?,
-                {column} = CASE WHEN usage_date = ? THEN {column} + 1 ELSE 1 END
+                {column} = ?
             WHERE user_id = ?
             """,
-            (today, today, user_id),
+            (today.isoformat(), new_count, user_id),
         )
         updated = conn.execute(
             "SELECT * FROM users WHERE user_id = ?", (user_id,)
@@ -496,7 +523,8 @@ def _backfill_user_columns(conn: sqlite3.Connection) -> None:
             usage_date = COALESCE(usage_date, ?),
             general_chat_count_today = COALESCE(general_chat_count_today, 0),
             one_oracle_count_today = COALESCE(one_oracle_count_today, 0),
-            pass_until = COALESCE(pass_until, premium_until)
+            pass_until = COALESCE(pass_until, premium_until),
+            last_general_chat_block_notice_at = COALESCE(last_general_chat_block_notice_at, NULL)
         """,
         (today,),
     )
@@ -521,5 +549,6 @@ __all__ = [
     "init_db",
     "log_payment",
     "mark_payment_refunded",
+    "set_last_general_chat_block_notice",
     "set_terms_accepted",
 ]
