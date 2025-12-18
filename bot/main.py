@@ -667,6 +667,15 @@ def build_paid_hint(text: str) -> str | None:
     return None
 
 
+def determine_action_count(user_id: int | None, message_id: int | None) -> int:
+    seed = (user_id or 0) * 31 + (message_id or 0)
+    rng = random.Random(seed)
+    roll = rng.random()
+    if roll < 0.15:
+        return 4
+    return 2 if rng.random() < 0.5 else 3
+
+
 async def execute_tarot_request(
     message: Message,
     user_query: str,
@@ -869,13 +878,20 @@ def build_tarot_messages(
     drawn_cards: list[dict[str, str]],
     short: bool = False,
     theme: str | None = None,
+    action_count: int | None = None,
 ) -> list[dict[str, str]]:
     rules = SHORT_TAROT_OUTPUT_RULES if short else TAROT_OUTPUT_RULES
     rules_text = "\n".join(f"- {rule}" for rule in rules)
     tarot_system_prompt = f"{get_tarot_system_prompt(theme)}\n出力ルール:\n{rules_text}"
+    action_count_text = (
+        f"- 次の一手の箇条書きは{action_count}個を目安に。内容が薄いなら減らし、必要なら最大4個まで。"
+        if action_count is not None
+        else "- 次の一手の箇条書きは2〜3個を基本に、必要なときだけ4個まで。"
+    )
     format_hint = (
         "必ず次の順序と改行で、見出しや絵文字を使わずに書いてください:\n"
         f"{TAROT_FIXED_OUTPUT_FORMAT}\n"
+        f"{action_count_text}\n"
         "- 1枚引きは350〜650字、3枚以上は550〜900字を目安に、1400文字以内に収める。\n"
         "- カード名は「引いたカード：」行で1回だけ伝える。🃏などの絵文字は禁止。"
     )
@@ -1386,12 +1402,14 @@ async def handle_tarot_reading(
             }
         )
 
+    action_count = determine_action_count(user_id, getattr(message, "message_id", None))
     messages = build_tarot_messages(
         spread=spread_to_use,
         user_query=user_query,
         drawn_cards=drawn_payload,
         short=short_response,
         theme=effective_theme,
+        action_count=action_count,
     )
 
     status_message: Message | None = None
