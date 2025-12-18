@@ -227,6 +227,28 @@ def format_long_answer(text: str, mode: str, card_line: str | None = None) -> st
     if not content:
         return "少し情報が足りないようです。もう一度教えてくださいね。"
 
+    lines = [
+        re.sub(r"^結論：?\s*", "", line)
+        for line in content.splitlines()
+    ]
+    cleaned_lines: list[str] = []
+    for line in lines:
+        stripped = re.sub(r"^[0-9]+[\.．]\s*", "", line)
+        stripped = re.sub(r"^[①②③④⑤⑥⑦⑧⑨⑩]\s*", "", stripped)
+        stripped = re.sub(r"^✅\s*", "", stripped)
+        stripped = stripped.replace("次の一手", "").strip()
+        if stripped or (cleaned_lines and cleaned_lines[-1] != ""):
+            cleaned_lines.append(stripped)
+
+    while cleaned_lines and cleaned_lines[0] == "":
+        cleaned_lines.pop(0)
+    while cleaned_lines and cleaned_lines[-1] == "":
+        cleaned_lines.pop()
+
+    content = "\n".join(cleaned_lines) if cleaned_lines else ""
+    if not content:
+        return "少し情報が足りないようです。もう一度教えてくださいね。"
+
     content = re.sub(r"(\n\s*){3,}", "\n\n", content)
     if len(content) > 1400:
         content = content[:1380].rstrip() + "…"
