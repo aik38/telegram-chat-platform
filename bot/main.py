@@ -1272,7 +1272,22 @@ async def handle_general_chat(message: Message, user_query: str) -> None:
         )
 
 
-@dp.message(~Command())
+# Catch-all handler for non-command text messages
+@dp.message(
+    ~Command(
+        commands=[
+            "terms",
+            "support",
+            "paysupport",
+            "buy",
+            "status",
+            "read1",
+            "love1",
+            "refund",
+            "start",
+        ]
+    )
+)
 async def handle_message(message: Message) -> None:
     text = (message.text or "").strip()
     now = utcnow()
