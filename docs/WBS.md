@@ -175,3 +175,13 @@
 - [ ] T12-02: 失敗ログの型（失敗理由カテゴリを決める）
 - [ ] T12-03: コスト監視（月次：原価率・上限アラート）
 - [ ] T12-04: 施策バックログ（次の一手を常に3つ持つ）
+
+## Launch (public + marketing) - 48h checklist
+
+- [ ] T-48h: `tools/sync.ps1` を実行して `pytest` green を確認（ログ保存）
+- [ ] T-48h: `.env` 本番値（BOT_TOKEN / OPENAI_API_KEY / 管理者ID / PAYWALL）を再確認
+- [ ] T-24h: 決済スモーク（/buy→購入→/status反映、/buy連打、stale callback）
+- [ ] T-24h: SQLite backup/restore 手順を一回“読み上げテスト”（復旧の想像がつく状態に）
+- [ ] T-12h: /start と /help の文面最終化（質問例・料金・次アクションが明確）
+- [ ] T-6h: SNS（X/IG）プロフィール/固定投稿/リンク導線を完成
+- [ ] T-0: 公開告知（3投稿）→ 24h 監視（ログ/決済/離脱点）→ 翌日小修正
