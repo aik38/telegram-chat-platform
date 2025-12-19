@@ -141,7 +141,6 @@ git add .; `
 git commit -m "Update tarot bot from local"; `
 git push origin main
 
-
 ## Dev routine (daily)
 1) Update local + test: `tools/sync.ps1` (double-click shortcut available)
 2) Pick next item from `docs/WBS.md` (Next 10 tasks)
