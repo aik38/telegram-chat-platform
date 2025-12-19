@@ -45,8 +45,10 @@ from core.config import ADMIN_USER_IDS, OPENAI_API_KEY, SUPPORT_EMAIL, TELEGRAM_
 from core.db import (
     TicketColumn,
     UserRecord,
+    check_db_health,
     consume_ticket,
     ensure_user,
+    get_latest_payment,
     get_payment_by_charge_id,
     get_user,
     grant_purchase,
@@ -54,6 +56,7 @@ from core.db import (
     increment_general_chat_count,
     increment_one_oracle_count,
     log_payment,
+    log_payment_event,
     mark_payment_refunded,
     set_terms_accepted,
     set_last_general_chat_block_notice,
@@ -93,8 +96,8 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 logger = logging.getLogger(__name__)
 dp.message.middleware(ThrottleMiddleware())
-# Callback queries should answer immediately; avoid throttling-induced delays.
-dp.callback_query.middleware(ThrottleMiddleware(apply_to_callbacks=False))
+# Callback queries are lightly throttled to absorb rapid taps without dropping the bot.
+dp.callback_query.middleware(ThrottleMiddleware(min_interval_sec=0.8, apply_to_callbacks=True))
 IN_FLIGHT_USERS: set[int] = set()
 RECENT_HANDLED: set[tuple[int, int]] = set()
 RECENT_HANDLED_ORDER: deque[tuple[int, int]] = deque(maxlen=500)
@@ -116,7 +119,8 @@ NON_CONSULT_OUT_OF_QUOTA_MESSAGE = (
     "ください。チャージは /buy です。"
 )
 GENERAL_CHAT_BLOCK_NOTICE_COOLDOWN = timedelta(hours=1)
-PURCHASE_DEDUP_TTL_SECONDS = 15.0
+PURCHASE_DEDUP_TTL_SECONDS = 30.0
+STALE_CALLBACK_MESSAGE = "ボタンの有効期限が切れました。/buy からもう一度お願いします。"
 
 USER_MODE: dict[int, str] = {}
 TAROT_FLOW: dict[int, str | None] = {}
@@ -194,9 +198,11 @@ async def _safe_answer_callback(query: CallbackQuery, *args, **kwargs) -> None:
         await query.answer(*args, **kwargs)
     except TelegramBadRequest as exc:
         if _is_stale_query_error(exc):
-            logger.warning(
-                "Callback answer skipped due to stale/invalid query",
-                extra={"callback_data": query.data, "error": str(exc)},
+            await _handle_stale_interaction(
+                query,
+                user_id=query.from_user.id if query.from_user else None,
+                sku=None,
+                payload=query.data,
             )
             return
         logger.exception(
@@ -458,9 +464,12 @@ async def _safe_answer_pre_checkout(
         )
     except TelegramBadRequest as exc:
         if _is_stale_query_error(exc):
-            logger.warning(
-                "Pre-checkout answer skipped due to stale/invalid query",
-                extra={"payload": pre_checkout_query.invoice_payload, "error": str(exc)},
+            await _handle_stale_interaction(
+                pre_checkout_query,
+                user_id=pre_checkout_query.from_user.id if pre_checkout_query.from_user else None,
+                sku=None,
+                payload=pre_checkout_query.invoice_payload,
+                event_type="stale_pre_checkout",
             )
             return
         logger.exception(
@@ -472,6 +481,51 @@ async def _safe_answer_pre_checkout(
             "Failed to answer pre_checkout_query",
             extra={"payload": pre_checkout_query.invoice_payload},
         )
+
+
+def _build_charge_retry_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🛒チャージへ", callback_data="nav:charge")],
+            [InlineKeyboardButton(text="📊ステータスを見る", callback_data="nav:status")],
+        ]
+    )
+
+
+def _safe_log_payment_event(
+    *, user_id: int | None, event_type: str, sku: str | None = None, payload: str | None = None
+) -> None:
+    if user_id is None:
+        return
+    try:
+        log_payment_event(user_id=user_id, event_type=event_type, sku=sku, payload=payload)
+    except Exception:
+        logger.exception(
+            "Failed to log payment event",
+            extra={"user_id": user_id, "event_type": event_type, "payload": payload},
+        )
+
+
+async def _handle_stale_interaction(
+    event: CallbackQuery | PreCheckoutQuery,
+    *,
+    user_id: int | None,
+    sku: str | None,
+    payload: str | None,
+    event_type: str = "stale_callback",
+) -> None:
+    chat_id: int | None = None
+    if isinstance(event, CallbackQuery) and event.message and event.message.chat:
+        chat_id = event.message.chat.id
+    _safe_log_payment_event(user_id=user_id, event_type=event_type, sku=sku, payload=payload)
+    if user_id is None and chat_id is None:
+        logger.warning("Stale interaction detected but no user/chat to notify", extra={"payload": payload})
+        return
+    try:
+        target = chat_id if chat_id is not None else user_id
+        await bot.send_message(target, STALE_CALLBACK_MESSAGE, reply_markup=_build_charge_retry_keyboard())
+    except Exception:
+        logger.exception("Failed to notify user about stale interaction", extra={"payload": payload, "user_id": user_id})
 
 
 def build_general_chat_messages(user_query: str) -> list[dict[str, str]]:
@@ -989,6 +1043,12 @@ def format_status(user: UserRecord, *, now: datetime | None = None) -> str:
         f"・画像オプション: {'有効' if user.images_enabled else '無効'}",
         f"・無料枠/カウントの次回リセット: {format_next_reset(now)}",
     ]
+    latest_payment = get_latest_payment(user.user_id)
+    if latest_payment:
+        product = get_product(latest_payment.sku)
+        label = product.title if product else latest_payment.sku
+        purchased_at = latest_payment.created_at.astimezone(USAGE_TIMEZONE).strftime("%Y-%m-%d %H:%M JST")
+        lines.append(f"・直近の購入: {label} / SKU: {latest_payment.sku}（付与: {purchased_at}）")
     if admin_mode:
         lines.insert(1, "・管理者権限: あり（課金の制限を受けません）")
     return "\n".join(lines)
@@ -1392,6 +1452,21 @@ async def handle_nav_status(query: CallbackQuery, state: FSMContext) -> None:
         await bot.send_message(user_id, formatted, reply_markup=base_menu_kb())
 
 
+@dp.callback_query(F.data == "nav:charge")
+async def handle_nav_charge(query: CallbackQuery, state: FSMContext) -> None:
+    await _safe_answer_callback(query, cache_time=1)
+    user_id = query.from_user.id if query.from_user else None
+    if user_id is not None:
+        ensure_user(user_id)
+        set_user_mode(user_id, "charge")
+    await state.clear()
+    if query.message:
+        await prompt_charge_menu(query.message)
+    elif user_id is not None:
+        await bot.send_message(user_id, CHARGE_MODE_PROMPT, reply_markup=base_menu_kb())
+        await bot.send_message(user_id, get_store_intro_text(), reply_markup=build_store_keyboard())
+
+
 @dp.callback_query(F.data.startswith("buy:"))
 async def handle_buy_callback(query: CallbackQuery):
     await _safe_answer_callback(query, cache_time=1)
@@ -1413,6 +1488,9 @@ async def handle_buy_callback(query: CallbackQuery):
 
     now = utcnow()
     user = ensure_user(user_id, now=now)
+    _safe_log_payment_event(
+        user_id=user_id, event_type="buy_click", sku=product.sku, payload=query.data
+    )
     if product.sku == "ADDON_IMAGES" and not IMAGE_ADDON_ENABLED:
         await _safe_answer_callback(
             query, "画像追加オプションは準備中です。リリースまでお待ちください。", show_alert=True
@@ -1443,6 +1521,9 @@ async def handle_buy_callback(query: CallbackQuery):
             return
 
     if _check_purchase_dedup(user_id, product.sku):
+        _safe_log_payment_event(
+            user_id=user_id, event_type="buy_dedup_hit", sku=product.sku, payload=query.data
+        )
         await _safe_answer_callback(
             query,
             "購入画面は既に表示しています。開いている決済画面をご確認ください。",
@@ -1458,14 +1539,30 @@ async def handle_buy_callback(query: CallbackQuery):
     prices = [LabeledPrice(label=product.title, amount=product.price_stars)]
 
     if query.message:
-        await query.message.answer_invoice(
-            title=product.title,
-            description=product.description,
-            payload=payload,
-            provider_token="",
-            currency="XTR",
-            prices=prices,
-        )
+        try:
+            await query.message.answer_invoice(
+                title=product.title,
+                description=product.description,
+                payload=payload,
+                provider_token="",
+                currency="XTR",
+                prices=prices,
+            )
+        except TelegramBadRequest as exc:
+            if _is_stale_query_error(exc):
+                await _handle_stale_interaction(
+                    query, user_id=user_id, sku=product.sku, payload=query.data
+                )
+                return
+            logger.exception(
+                "Failed to send invoice",
+                extra={"user_id": user_id, "sku": product.sku, "error": str(exc)},
+            )
+            await query.message.answer(
+                "決済画面の表示に失敗しました。/buy からもう一度お試しください。",
+                reply_markup=_build_charge_retry_keyboard(),
+            )
+            return
     await _safe_answer_callback(query, "お支払い画面を開きます。ゆっくり進めてくださいね。")
 
 
@@ -1512,7 +1609,14 @@ async def process_pre_checkout(pre_checkout_query: PreCheckoutQuery):
     sku, payload_user_id = _parse_invoice_payload(pre_checkout_query.invoice_payload or "")
     product = get_product(sku) if sku else None
     user_id = pre_checkout_query.from_user.id if pre_checkout_query.from_user else None
+    log_user_id = user_id or payload_user_id
     if not product:
+        _safe_log_payment_event(
+            user_id=log_user_id,
+            event_type="pre_checkout_invalid_product",
+            sku=sku if sku else None,
+            payload=pre_checkout_query.invoice_payload,
+        )
         logger.warning(
             "Pre-checkout received without product",
             extra={"payload": pre_checkout_query.invoice_payload},
@@ -1524,6 +1628,12 @@ async def process_pre_checkout(pre_checkout_query: PreCheckoutQuery):
         )
         return
     if payload_user_id is None or user_id is None or payload_user_id != user_id:
+        _safe_log_payment_event(
+            user_id=log_user_id,
+            event_type="pre_checkout_rejected",
+            sku=product.sku,
+            payload=pre_checkout_query.invoice_payload,
+        )
         await _safe_answer_pre_checkout(
             pre_checkout_query,
             ok=False,
@@ -1532,6 +1642,12 @@ async def process_pre_checkout(pre_checkout_query: PreCheckoutQuery):
         return
 
     ensure_user(user_id)
+    _safe_log_payment_event(
+        user_id=user_id,
+        event_type="pre_checkout",
+        sku=product.sku,
+        payload=pre_checkout_query.invoice_payload,
+    )
     await _safe_answer_pre_checkout(pre_checkout_query, ok=True)
 
 
@@ -1563,6 +1679,12 @@ async def process_successful_payment(message: Message):
         stars=payment.total_amount,
         telegram_payment_charge_id=payment.telegram_payment_charge_id,
         provider_payment_charge_id=payment.provider_payment_charge_id,
+    )
+    _safe_log_payment_event(
+        user_id=user_id,
+        event_type="successful_payment" if created else "successful_payment_duplicate",
+        sku=product.sku,
+        payload=payment.telegram_payment_charge_id,
     )
     if not created:
         await message.answer(
@@ -1610,6 +1732,12 @@ async def cmd_refund(message: Message) -> None:
         return
 
     updated = mark_payment_refunded(charge_id)
+    _safe_log_payment_event(
+        user_id=payment.user_id,
+        event_type="refund",
+        sku=payment.sku,
+        payload=charge_id,
+    )
     status_line = f"status={updated.status}" if updated else "status=refunded"
     await message.answer(
         "返金処理が完了しました。\n"
@@ -2037,6 +2165,12 @@ async def handle_message(message: Message) -> None:
 
 async def main() -> None:
     setup_logging()
+    db_ok, db_messages = check_db_health()
+    for message in db_messages:
+        logger.info("DB health check: %s", message, extra={"mode": "startup"})
+    if not db_ok:
+        logger.error("DB health check failed; exiting for safety.")
+        raise SystemExit(1)
     logger.info(
         "Starting akolasia_tarot_bot",
         extra={

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import sqlite3
 from dataclasses import dataclass
@@ -11,6 +12,7 @@ from core.store.catalog import get_product
 
 DB_PATH = os.getenv("SQLITE_DB_PATH", "db/telegram_tarot.db")
 USAGE_TIMEZONE = timezone(timedelta(hours=9))
+logger = logging.getLogger(__name__)
 
 
 def _usage_date(now: datetime) -> date:
@@ -47,6 +49,16 @@ class PaymentRecord:
     refund_id: str | None
     created_at: datetime
     refunded_at: datetime | None
+
+
+@dataclass
+class PaymentEvent:
+    id: int
+    user_id: int
+    event_type: str
+    sku: str | None
+    payload: str | None
+    created_at: datetime
 
 
 TicketColumn = Literal["tickets_3", "tickets_7", "tickets_10"]
@@ -108,6 +120,18 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS payment_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INT,
+                event_type TEXT,
+                sku TEXT,
+                payload TEXT,
+                created_at TEXT
+            )
+            """
+        )
 
         if not _column_exists(conn, "users", "terms_accepted_at"):
             conn.execute("ALTER TABLE users ADD COLUMN terms_accepted_at TEXT")
@@ -145,6 +169,12 @@ def init_db() -> None:
             CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_telegram_charge_id
             ON payments(telegram_payment_charge_id)
             WHERE telegram_payment_charge_id IS NOT NULL
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_payment_events_user_created
+            ON payment_events(user_id, created_at)
             """
         )
 
@@ -285,6 +315,120 @@ def mark_payment_refunded(
     return _row_to_payment(row)
 
 
+def log_payment_event(
+    *, user_id: int, event_type: str, sku: str | None = None, payload: str | None = None, now: datetime | None = None
+) -> PaymentEvent:
+    now = now or datetime.now(timezone.utc)
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO payment_events (user_id, event_type, sku, payload, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (user_id, event_type, sku, payload, now.isoformat()),
+        )
+        row = conn.execute(
+            "SELECT * FROM payment_events WHERE user_id = ? ORDER BY id DESC LIMIT 1",
+            (user_id,),
+        ).fetchone()
+    if row is None:
+        raise ValueError("Failed to insert payment event")
+    return _row_to_payment_event(row)
+
+
+def get_latest_payment(user_id: int) -> PaymentRecord | None:
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT * FROM payments
+            WHERE user_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """,
+            (user_id,),
+        ).fetchone()
+    if not row:
+        return None
+    return _row_to_payment(row)
+
+
+def check_db_health() -> tuple[bool, list[str]]:
+    messages: list[str] = []
+    db_file = Path(DB_PATH)
+    if not db_file.exists():
+        message = f"DB file missing at {db_file}"
+        logger.error(message)
+        return False, [message]
+
+    try:
+        with _connect() as conn:
+            integrity = conn.execute("PRAGMA quick_check").fetchone()
+            if not integrity or integrity[0] != "ok":
+                message = f"PRAGMA quick_check failed: {integrity[0] if integrity else 'unknown'}"
+                logger.error(message)
+                return False, [message]
+
+            requirements: dict[str, set[str]] = {
+                "users": {
+                    "user_id",
+                    "created_at",
+                    "premium_until",
+                    "pass_until",
+                    "first_seen",
+                    "usage_date",
+                    "general_chat_count_today",
+                    "one_oracle_count_today",
+                    "tickets_3",
+                    "tickets_7",
+                    "tickets_10",
+                    "images_enabled",
+                    "terms_accepted_at",
+                    "last_general_chat_block_notice_at",
+                },
+                "payments": {
+                    "user_id",
+                    "sku",
+                    "stars",
+                    "telegram_payment_charge_id",
+                    "provider_payment_charge_id",
+                    "status",
+                    "refund_id",
+                    "created_at",
+                    "refunded_at",
+                },
+                "payment_events": {
+                    "user_id",
+                    "event_type",
+                    "sku",
+                    "payload",
+                    "created_at",
+                },
+            }
+
+            for table, required_columns in requirements.items():
+                rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+                if not rows:
+                    message = f"table missing: {table}"
+                    logger.error(message)
+                    messages.append(message)
+                    continue
+                present = {row[1] for row in rows}
+                missing = required_columns - present
+                if missing:
+                    message = f"table {table} missing columns: {', '.join(sorted(missing))}"
+                    logger.error(message)
+                    messages.append(message)
+                else:
+                    messages.append(f"table {table}: ok ({len(present)} columns)")
+
+    except Exception as exc:  # pragma: no cover - defensive
+        message = f"DB health check failed with exception: {exc}"
+        logger.exception(message)
+        return False, [message]
+
+    return (not any(msg.startswith("table missing") or "missing columns" in msg for msg in messages)), messages
+
+
 def _row_to_user(row: sqlite3.Row) -> UserRecord:
     premium_until = row["premium_until"]
     pass_until = row["pass_until"]
@@ -334,6 +478,17 @@ def _row_to_payment(row: sqlite3.Row) -> PaymentRecord:
             if row["refunded_at"]
             else None
         ),
+    )
+
+
+def _row_to_payment_event(row: sqlite3.Row) -> PaymentEvent:
+    return PaymentEvent(
+        id=row["id"],
+        user_id=row["user_id"],
+        event_type=row["event_type"],
+        sku=row["sku"],
+        payload=row["payload"],
+        created_at=datetime.fromisoformat(row["created_at"]),
     )
 
 
@@ -534,12 +689,15 @@ init_db()
 
 __all__ = [
     "DB_PATH",
+    "PaymentEvent",
     "PaymentRecord",
     "UserRecord",
     "TicketColumn",
+    "check_db_health",
     "consume_ticket",
     "ensure_user",
     "get_user",
+    "get_latest_payment",
     "get_payment_by_charge_id",
     "grant_purchase",
     "has_active_pass",
@@ -548,6 +706,7 @@ __all__ = [
     "increment_one_oracle_count",
     "init_db",
     "log_payment",
+    "log_payment_event",
     "mark_payment_refunded",
     "set_last_general_chat_block_notice",
     "set_terms_accepted",

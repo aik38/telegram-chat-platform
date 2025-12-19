@@ -5,13 +5,13 @@
 ## Next 10 tasks（優先度順・完了条件つき）
 1. [x] 価格・SKUの最終確定（3枚=100⭐️など）を `core/store/catalog.py` と `docs/pricing_notes.md` に反映し、/buy の文面も一致させる。完了条件: カタログとドキュメントの価格が一致し、/buy で同じ価格が表示される。(core/store/catalog.py L18-L81; docs/pricing_notes.md L8-L15; bot/main.py L900-L929)
 2. [x] /buy の案内文と言い回しを強化し、「パス保持者は占いに戻る」導線と「どの商品を選べばよいか」を明示する。完了条件: get_store_intro_text などの出力にパス保持者向けの説明が追加され、文面レビュー済み。(bot/main.py L900-L929)
-3. [ ] 決済イベント（buyクリック→pre_checkout→successful_payment→refund）を永続化するイベントログを追加し、重複検知やアラートに使える形にする。完了条件: 新しいイベントテーブルが生きており、各ステップでレコードが残る。
+3. [x] 決済イベント（buyクリック→pre_checkout→successful_payment→refund）を永続化するイベントログを追加し、重複検知やアラートに使える形にする。完了条件: 新しいイベントテーブルが生きており、各ステップでレコードが残る。(core/db.py `payment_events` + `log_payment_event`; bot/main.py buy/pre/refund各イベントで記録)
 4. [ ] 決済導線のユニット/スモークテスト（payloadパース、重複防止TTL、権限付与）を pytest に追加し、CIで落ちないことを確認する。完了条件: `python -m pytest -q` が通り、テストが決済導線をカバーする。
 5. [ ] 手動スモークテスト手順（/buy 連打・stale callback・/status 反映）を簡潔にまとめ、リリース前チェックリストへ組み込む。完了条件: docs に手順が追加され、README から到達できる。
-6. [ ] stale/expired な callback/pre_checkout を検知した場合に、ユーザーへ「もう一度 /buy から進めてください」の再案内を自動送出する。完了条件: stale系エラーでユーザーに再案内が届くことを手動確認。
-7. [ ] /status に「直近の購入SKU/付与時刻」を追加し、決済後に真実を語る導線を強化する。完了条件: /status 表示に最新購入情報が出る。
-8. [ ] 起動時のDBヘルスチェック（パス・スキーマ検証）を明示し、失敗時はログを出して安全に停止する。完了条件: 起動ログにDBチェック結果が出て、破損時に停止する。
-9. [ ] 購入系 callback のレート制限/デュープ防御をチューニングし、連打でも落ちずに案内が返ることを保証する。完了条件: throttle/TTL設定が明文化され、連打検証で落ちないことを確認。
+6. [x] stale/expired な callback/pre_checkout を検知した場合に、ユーザーへ「もう一度 /buy から進めてください」の再案内を自動送出する。完了条件: stale系エラーでユーザーに再案内が届くことを手動確認。(bot/main.py `_handle_stale_interaction` + staleメッセージ)
+7. [x] /status に「直近の購入SKU/付与時刻」を追加し、決済後に真実を語る導線を強化する。完了条件: /status 表示に最新購入情報が出る。(bot/main.py `format_status` に最新購入行)
+8. [x] 起動時のDBヘルスチェック（パス・スキーマ検証）を明示し、失敗時はログを出して安全に停止する。完了条件: 起動ログにDBチェック結果が出て、破損時に停止する。(core/db.py `check_db_health`; bot/main.py startupで強制実行)
+9. [x] 購入系 callback のレート制限/デュープ防御をチューニングし、連打でも落ちずに案内が返ることを保証する。完了条件: throttle/TTL設定が明文化され、連打検証で落ちないことを確認。(bot/main.py `PURCHASE_DEDUP_TTL_SECONDS=30s`, callback throttle=0.8s, stale誘導ボタン)
 10. [ ] SQLite バックアップ/リストア手順（payments/users）を運用メモとして追加し、復旧パスを1枚にまとめる。完了条件: docs に手順があり、README からリンクされる。
 
 ## 記号ルール
@@ -24,6 +24,7 @@
 - Invoice多重発行の抑止と stale callback 吸収が入っている（dedup TTL＋`_safe_answer_callback/_safe_answer_pre_checkout`）。(bot/main.py L182-L208, L431-L447, L450-L475, L1393-L1449)
 - pre_checkout → successful_payment → 権限付与 → /status 導線が成立し、購入後の戻り先ボタンも提供。(bot/main.py L1490-L1561; core/db.py L214-L392)
 - /status は trial残日数・パス期限・チケット残数を1画面に集約し、管理者モードにも対応。(bot/main.py L900-L970, L1356-L1370)
+- 決済系の連打耐性: callback throttle=0.8s + purchase dedup TTL=30s を明示し、stale時は「チャージへ」ボタン付き再案内を自動送出。(bot/main.py `_check_purchase_dedup`, `_handle_stale_interaction`)
 
 ---
 
