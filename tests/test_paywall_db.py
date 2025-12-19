@@ -60,3 +60,51 @@ def test_consume_ticket_reduces_balance(db):
     db.grant_purchase(user_id, "TICKET_3", now=base)
     assert db.consume_ticket(user_id, ticket="tickets_3")
     assert not db.consume_ticket(user_id, ticket="tickets_3")
+
+
+def test_payment_events_and_latest_payment(db):
+    base = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    user_id = 999
+    db.ensure_user(user_id, now=base)
+
+    event = db.log_payment_event(
+        user_id=user_id,
+        event_type="buy_click",
+        sku="TICKET_3",
+        payload="test",
+        now=base,
+    )
+    assert event.event_type == "buy_click"
+    assert event.sku == "TICKET_3"
+
+    first_payment, _ = db.log_payment(
+        user_id=user_id,
+        sku="TICKET_3",
+        stars=100,
+        telegram_payment_charge_id="ch_1",
+        provider_payment_charge_id=None,
+        now=base + timedelta(minutes=1),
+    )
+    _, _ = db.log_payment(
+        user_id=user_id,
+        sku="PASS_7D",
+        stars=200,
+        telegram_payment_charge_id="ch_2",
+        provider_payment_charge_id=None,
+        now=base + timedelta(minutes=2),
+    )
+
+    latest = db.get_latest_payment(user_id)
+    assert latest is not None
+    assert latest.telegram_payment_charge_id == "ch_2"
+    assert latest.created_at > first_payment.created_at
+
+
+def test_check_db_health_detects_missing_file(db, tmp_path):
+    db_path = tmp_path / "missing.db"
+    db.DB_PATH = str(db_path)
+    if db_path.exists():
+        db_path.unlink()
+    ok, messages = db.check_db_health()
+    assert ok is False
+    assert any("missing" in msg for msg in messages)
