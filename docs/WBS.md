@@ -2,6 +2,17 @@
 
 このドキュメントを **唯一のWBS** とし、進捗スナップショットは `docs/WBS_PROGRESS.md` に記録します（最終更新: 2025-05-06 UTC）。見た目よりも「落ちない」「迷子にならない」を最優先で維持します。
 
+## Launch (public + marketing) - 48h checklist
+
+- [ ] T-48h: `tools/sync.ps1` を実行して `pytest` green を確認（ログ保存）
+- [ ] T-48h: `.env` 本番値（BOT_TOKEN / OPENAI_API_KEY / 管理者ID / PAYWALL）を再確認
+- [ ] T-24h: 決済スモーク（/buy→購入→/status反映、/buy連打、stale callback）
+- [ ] T-24h: SQLite backup/restore 手順を一回“読み上げテスト”（復旧の想像がつく状態に）
+- [ ] T-12h: /start と /help の文面最終化（質問例・料金・次アクションが明確）
+- [ ] T-6h: SNS（X/IG）プロフィール/固定投稿/リンク導線を完成
+- [ ] T-0: 公開告知（3投稿）→ 24h 監視（ログ/決済/離脱点）→ 翌日小修正
+
+
 ## Next 10 tasks（優先度順・完了条件つき）
 1. [x] T1-08: 管理者用コマンド拡充（/admin grant）。完了条件: 管理者が /admin grant <user_id> <SKU> でパス/チケット/アドオンを安全に付与でき、成功/失敗時の案内が丁寧に返る。(bot/main.py L1706-L1777; tests/test_bot_modes.py L281-L310)
 2. [x] T1-05: 例文（質問の例）をテーマ別に最小セットへ拡充し、/help からも辿れるようにする。完了条件: bot/main.py の例文がテーマ別に整理され、README か /help から到達できる。(bot/main.py L130-L205, L1345-L1346; bot/texts/ja.py L1-L15; tests/test_bot_modes.py L71-L80)
