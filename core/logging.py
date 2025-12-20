@@ -2,8 +2,35 @@ import logging
 import os
 from contextvars import ContextVar
 from logging.handlers import RotatingFileHandler
+from typing import Iterable
 
 request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
+_SENSITIVE_ENV_VARS = ("TELEGRAM_BOT_TOKEN", "OPENAI_API_KEY")
+
+
+def _gather_env_values(keys: Iterable[str]) -> list[str]:
+    secrets: list[str] = []
+    for key in keys:
+        value = os.getenv(key, "")
+        if value:
+            secrets.append(value)
+    return secrets
+
+
+def collect_sensitive_values(additional: Iterable[str] | None = None) -> list[str]:
+    """Return a list of sensitive strings that should be masked in logs."""
+    secrets = _gather_env_values(_SENSITIVE_ENV_VARS)
+    if additional:
+        secrets.extend([value for value in additional if value])
+    return secrets
+
+
+def mask_secrets(message: str, secrets: Iterable[str]) -> str:
+    """Replace sensitive substrings in the given message with asterisks."""
+    masked = message
+    for secret in secrets:
+        masked = masked.replace(secret, "***")
+    return masked
 
 
 class SafeLogFilter(logging.Filter):
@@ -13,10 +40,7 @@ class SafeLogFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         record.request_id = request_id_var.get("-")
-        message = record.getMessage()
-        for secret in self.secrets:
-            message = message.replace(secret, "***")
-        record.msg = message
+        record.msg = mask_secrets(record.getMessage(), self.secrets)
         record.args = ()
         return True
 
@@ -37,13 +61,11 @@ def setup_logging() -> None:
     )
     handlers.append(file_handler)
 
-    filter_instance = SafeLogFilter(
-        [os.getenv("TELEGRAM_BOT_TOKEN", ""), os.getenv("OPENAI_API_KEY", "")]
-    )
+    filter_instance = SafeLogFilter(collect_sensitive_values())
     for handler in handlers:
         handler.addFilter(filter_instance)
 
     logging.basicConfig(level=log_level, format=log_format, handlers=handlers)
 
 
-__all__ = ["setup_logging", "request_id_var"]
+__all__ = ["collect_sensitive_values", "mask_secrets", "request_id_var", "setup_logging"]

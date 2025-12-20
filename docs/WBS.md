@@ -19,8 +19,8 @@
 6. [~] T5-06: 返金/失敗/二重決済の扱い（状態遷移表）。完了条件: 返金・失敗・二重決済時の状態図と通知シナリオが docs に追加され、テストで主要パスをカバーする。(bot/main.py L1563-L1599; core/db.py L255-L286)
 7. [ ] T5-07: 管理者で手動付与/剥奪（トラブル対応）。完了条件: 管理者が手動で付与/剥奪でき、監査ログが残る。
 8. [~] T7-01: ログ整備（request単位で追える）。完了条件: 構造化ログか相当の追跡方法が入り、主要イベントが request_id で紐付けられる。(core/logging.py L1-L26; bot/main.py L2006-L2023)
-9. [~] T7-05: レート制限（ユーザー別：秒間/分間）。完了条件: ThrottleMiddleware のしきい値/通知文言が調整され、連打でも UX を崩さない。
-10. [~] T7-06: シークレット管理（.env 読み込み、ログへの鍵非出力）。完了条件: シークレット取扱ルールが docs に明記され、不要な出力が抑止される。(core/config.py)
+9. [x] T7-05: レート制限（ユーザー別：秒間/分間）。完了条件: ThrottleMiddleware のしきい値/通知文言が調整され、連打でも UX を崩さない。(core/config.py で閾値を環境変数化、bot/texts/ja.py で丁寧な案内に更新、tests/test_throttle.py で連打時も案内が返ることを確認)
+10. [x] T7-06: シークレット管理（.env 読み込み、ログへの鍵非出力）。完了条件: シークレット取扱ルールが docs に明記され、不要な出力が抑止される。(core/logging.py のマスクユーティリティ強化、README/launch_checklist に運用ルールを追記、tests/test_logging_masking.py でログ出力のマスクを検証)
 
 ## 🚀 Launch (public + marketing) - 48h checklist
 
@@ -143,8 +143,8 @@
 - [x] T7-02: 例外ハンドリング（OpenAI失敗/タイムアウト/429、callback/pre_checkout）(bot/main.py L182-L208, L450-L475, L485-L520)
 - [x] T7-03: リトライ方針（OpenAIリトライ3回＋バックオフ）(bot/main.py L485-L520)
 - [ ] T7-04: 監視（ヘルスチェック/死活監視/通知）
-- [~] T7-05: レート制限（ユーザー別：秒間/分間）(bot/main.py L44-L54; ThrottleMiddleware) ― 追加チューニング余地あり。
-- [~] T7-06: シークレット管理（.env読み込み、ログへの鍵非出力）(core/config.py) ― 運用ルールの明文化が未。
+- [x] T7-05: レート制限（ユーザー別：秒間/分間）(bot/main.py L44-L54; ThrottleMiddleware) ― core/config.py の閾値設定＋文言更新＋tests/test_throttle.py で連打時の案内を確認。
+- [x] T7-06: シークレット管理（.env読み込み、ログへの鍵非出力）(core/config.py) ― core/logging.py のマスクユーティリティ強化＋tests/test_logging_masking.py で検証＋README/launch_checklist に運用ルール追記。
 
 ---
 

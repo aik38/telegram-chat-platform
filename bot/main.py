@@ -43,7 +43,14 @@ from openai import (
     RateLimitError,
 )
 
-from core.config import ADMIN_USER_IDS, OPENAI_API_KEY, SUPPORT_EMAIL, TELEGRAM_BOT_TOKEN
+from core.config import (
+    ADMIN_USER_IDS,
+    OPENAI_API_KEY,
+    SUPPORT_EMAIL,
+    TELEGRAM_BOT_TOKEN,
+    THROTTLE_CALLBACK_INTERVAL_SEC,
+    THROTTLE_MESSAGE_INTERVAL_SEC,
+)
 from core.db import (
     TicketColumn,
     UserRecord,
@@ -101,9 +108,13 @@ dp = Dispatcher()
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 logger = logging.getLogger(__name__)
-dp.message.middleware(ThrottleMiddleware())
+dp.message.middleware(ThrottleMiddleware(min_interval_sec=THROTTLE_MESSAGE_INTERVAL_SEC))
 # Callback queries are lightly throttled to absorb rapid taps without dropping the bot.
-dp.callback_query.middleware(ThrottleMiddleware(min_interval_sec=0.8, apply_to_callbacks=True))
+dp.callback_query.middleware(
+    ThrottleMiddleware(
+        min_interval_sec=THROTTLE_CALLBACK_INTERVAL_SEC, apply_to_callbacks=True
+    )
+)
 
 
 def _build_request_id(event: CallbackQuery | Message) -> str:
