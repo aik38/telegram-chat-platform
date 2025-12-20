@@ -17,6 +17,13 @@ pip install -r requirements.txt
 
 - `.env.example` を `.env` にコピーして値を埋めてください。
 - `SUPPORT_EMAIL`: 利用規約やサポート案内に表示するメールアドレス。未設定時は `hasegawaarisa1@gmail.com` が使われますが、ダミー表記を避けるため環境変数で上書きする運用を推奨します。
+- `THROTTLE_MESSAGE_INTERVAL_SEC` / `THROTTLE_CALLBACK_INTERVAL_SEC`: テキスト送信・ボタン連打それぞれの最小間隔（秒）。未設定時は 1.2s / 0.8s のままです。負荷試験時に環境変数で調整してください。
+
+### シークレット運用ルール
+
+- `.env` を含むシークレットファイルはコミットしないでください（`.env.example` のみを追跡対象にします）。
+- ログや print で BOT_TOKEN / OPENAI_API_KEY などの値を直接出力しないでください。`core.logging.SafeLogFilter` がコンソールと `logs/bot.log` でトークンをマスクするので、開発時はこのロガーを経由する形を維持してください。
+- 調査でシークレット値を扱う場合は、メモやスクリーンショットにも残さない運用を徹底してください。
 
 ### 管理者ID（ADMIN_USER_IDS）の設定
 
@@ -179,7 +186,7 @@ git push origin main
 ## Launch: 48h checklist (public + marketing start)
 
 ### T-48h〜T-24h（技術・運用を固める）
-- [ ] `tools/sync.ps1` 実行 → `pytest` が通る（緑で終了する）
+- [ ] `tools/sync.ps1` 実行 → `pytest` が通る（緑で終了する）。PowerShell から `tools/sync.ps1` を実行してコンソールログを保存しておく。
 - [ ] `.env`（本番用）を確認：BOT_TOKEN / OPENAI_API_KEY / 管理者ID / PAYWALL設定
 - [ ] 決済の本番スモーク（Stars/決済導線）
   - [ ] `/buy` → 購入 → 成功メッセージ → `/status` に反映

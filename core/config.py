@@ -19,10 +19,22 @@ def _parse_admin_ids(raw: str) -> Set[int]:
     return values
 
 
+def _parse_float_env(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "hasegawaarisa1@gmail.com")
 ADMIN_USER_IDS = _parse_admin_ids(os.getenv("ADMIN_USER_IDS", ""))
+THROTTLE_MESSAGE_INTERVAL_SEC = _parse_float_env("THROTTLE_MESSAGE_INTERVAL_SEC", 1.2)
+THROTTLE_CALLBACK_INTERVAL_SEC = _parse_float_env("THROTTLE_CALLBACK_INTERVAL_SEC", 0.8)
 
 if not TELEGRAM_BOT_TOKEN:
     raise RuntimeError("TELEGRAM_BOT_TOKEN is not set in environment or .env")
