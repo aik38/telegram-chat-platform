@@ -90,12 +90,36 @@ def test_format_tarot_answer_removes_headings_and_merges_conclusion():
         "・周囲の声を丁寧に拾う。\n"
         "・焦らず段取りを整える。\n"
         "\n"
-        "来年の仕事運は落ち着きを取り戻すでしょう。"
+        "まとめとして、来年の仕事運は落ち着きを取り戻すでしょう。"
     )
 
     formatted = format_tarot_answer(answer, card_line=card_line)
 
     assert formatted.count("《カード》：") == 1
     assert "メインメッセージ" not in formatted
-    assert formatted.splitlines()[-1].startswith("・")
-    assert "まとめとして、来年の仕事運は落ち着きを取り戻すでしょう。" in formatted
+    lines = formatted.splitlines()
+    assert lines[-2].startswith("・")
+    assert lines[-1] == "来年の仕事運は落ち着きを取り戻すでしょう。"
+
+
+def test_format_tarot_answer_strips_meta_conclusion_and_headings():
+    drawn_cards = _build_drawn_cards(ONE_CARD)
+    card_line = format_drawn_cards(drawn_cards)
+    answer = (
+        "結論として、前に進めるタイミングです。\n"
+        "引いたカード：カップのペイジ（正位置）\n"
+        "理由：新しい誘いに心を開いて。\n"
+        "・話をよく聞く。\n"
+        "・自分のペースで関わる。\n"
+        "\n"
+        "まとめとして、少しずつで大丈夫です。"
+    )
+
+    formatted = format_tarot_answer(answer, card_line=card_line)
+
+    assert formatted.count("《カード》：") == 1
+    assert "結論として" not in formatted
+    assert "まとめとして" not in formatted
+    lines = formatted.splitlines()
+    assert lines[-2].startswith("・")
+    assert lines[-1] == "少しずつで大丈夫です。"
