@@ -1,20 +1,24 @@
-# WBS_PROGRESS - 2025-05-06 (payment flow stabilization audit)
+# WBS_PROGRESS - 2025-12-20（lock/queue + postprocess + audit refresh）
 
-目的: 決済導線の安定化が main にマージされた状態を棚卸しし、canonical WBS（docs/WBS.md）を更新したスナップショット。
+目的: 直近のマージ（リクエストID付きログ、per-user ロック/キュー、LLM postprocess、/admin revoke 監査、payment_states.md、launch_checklist.md など）を main に反映した状態を棚卸しし、canonical WBS（docs/WBS.md）を同期したスナップショット。
 
 ## 追加進捗
-- T1-05: テーマ別の質問例を拡充し、/help から辿れるように整理。(bot/main.py L130-L205, L1345-L1346; bot/texts/ja.py L1-L15; tests/test_bot_modes.py L71-L80)
+- request_id 付きのロギングとシークレットマスクを全ハンドラに適用。(core/logging.py; bot/main.py RequestIdMiddleware)
+- 同一ユーザーの併走セッションをロック＋待機案内で順次処理に統一。(bot/main.py `_acquire_inflight`)
+- LLM 出力の改行整形と長文ソフトカットを postprocess で共通化し、OpenAI 呼び出しに組み込み。(bot/utils/postprocess.py; bot/main.py call_openai_with_retry)
+- レート制限しきい値を環境変数化し、連打時の案内文面を更新。(core/config.py; bot/texts/ja.py)
+- /admin revoke を含む管理者付与/剥奪の監査を追加し、返金・失敗・二重決済の状態遷移を docs/payment_states.md に整理。
+- docs/launch_checklist.md を公開前手順として追加。
 
 ## 今回完了扱いにした主な項目
-- /buy の導線と重複購入防止（dedup TTL + invoice 多重抑止）を確認。(bot/main.py L431-L447, L1187-L1449)
-- pre_checkout → successful_payment → 付与 → /status 導線が一連で動くことを確認。(bot/main.py L1490-L1560; core/db.py L214-L392)
-- /status が trial残日数・パス期限・チケット残数を一画面で返すことを確認。(bot/main.py L900-L970)
-- スタートアップログ・例外処理が落ちずに動作することを再確認。(core/logging.py L1-L26; bot/main.py L182-L208, L450-L520, L2006-L2023)
+- T3-08（併走セッションロック/キュー）、T4-06（LLM postprocess）、T5-06（返金/失敗/二重決済ドキュメント）、T5-07（管理者付与/剥奪＋監査）、T7-01（request_id ログ + マスク）、T7-05（レート制限しきい値環境変数化）、T7-06（シークレット管理）が Done に移行。
+- T3-07（相談モード仕様）と T4-07（料金最適化）は現行方針を維持する前提で凍結し、再設計しないことを明記。
 
 ## まだ未着手/要補完の主要ポイント
-- 返金/失敗時の状態遷移表と通知、手動付与/剥奪の運用は未整備。(bot/main.py L1563-L1599)
-- 決済イベントの永続化・監視、callback 連打時の追加レート制限は未着手。
-- /status への購入履歴表示や stale callback 時のユーザー再案内は未実装。
+- プロンプトテンプレの安定化テスト（T4-02）と Bot/FastAPI 分離検討（T4-08）。
+- DB 永続化強化（sessions/messages/app_events：T6-03/04/07）と監視導線（T7-04）。
+- 相談モード価値定義・購入導線の文面整理（T8A-04/05）とメッセージ文体ガイド（T8A-06）。
+- コスト監視と不正対策（T5-09/10）の運用ルール策定。
 
 ## 次に着手すべき10タスク
-- docs/WBS.md の「Next 10 tasks」を参照（価格確定、案内文強化、決済イベントログ、テスト追加など）。
+- docs/WBS.md の「Next 10 tasks」を参照（T4-02, T4-08, T5-09, T5-10, T6-03/04/07, T7-04, T8A-04/05）。
