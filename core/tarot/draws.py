@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Sequence
 import random
+from dataclasses import dataclass
 
 from .cards import TarotCard, ALL_CARDS
 from .spreads import Spread
