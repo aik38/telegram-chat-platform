@@ -393,6 +393,17 @@ def _parse_invoice_payload(payload: str) -> tuple[str | None, int | None]:
 
 CARD_LINE_PREFIX = "《カード》："
 
+_META_HEADING_PATTERNS = (
+    r"^(まとめとして|結論として|総括として|総評として|まとめると|結論から言うと)[、,:：]?\s*",
+)
+
+
+def _strip_meta_prefix(text: str) -> str:
+    cleaned = text
+    for pattern in _META_HEADING_PATTERNS:
+        cleaned = re.sub(pattern, "", cleaned)
+    return cleaned.strip()
+
 
 def _inject_position_headings(
     lines: list[str], position_labels: Sequence[str] | None
@@ -430,24 +441,46 @@ def _inject_position_headings(
     return new_lines
 
 
-def _merge_conclusion_into_bullet_list(lines: list[str]) -> list[str]:
+def _compress_trailing_text(trailing_text: str) -> str:
+    normalized = _strip_meta_prefix(trailing_text)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    if not normalized:
+        return ""
+
+    sentences = re.split(r"(?<=[。．！？!？])\s*", normalized)
+    sentences = [s for s in sentences if s]
+    if not sentences:
+        return normalized
+
+    compressed = "".join(sentences[:2]).strip()
+    return compressed
+
+
+def _finalize_tarot_lines(lines: list[str]) -> list[str]:
     bullet_indexes = [idx for idx, line in enumerate(lines) if line.lstrip().startswith("・")]
-    if not bullet_indexes:
-        return lines
+    if bullet_indexes:
+        limited_lines: list[str] = []
+        bullet_seen = 0
+        for idx, line in enumerate(lines):
+            if idx in bullet_indexes:
+                bullet_seen += 1
+                if bullet_seen > 4:
+                    continue
+            limited_lines.append(line)
+        lines = limited_lines
 
-    last_bullet_idx = bullet_indexes[-1]
-    trailing = lines[last_bullet_idx + 1 :]
-    while trailing and trailing[0] == "":
-        trailing.pop(0)
-    trailing_text = " ".join([t for t in trailing if t]).strip()
-    if trailing_text:
-        merged = lines[last_bullet_idx].rstrip()
-        if merged and merged[-1] not in ("。", "！", "!", "？", "?", "、", "」"):
-            merged += "。"
-        merged = f"{merged} まとめとして、{trailing_text}"
-        return lines[:last_bullet_idx] + [merged]
+        bullet_indexes = [idx for idx, line in enumerate(lines) if line.lstrip().startswith("・")]
+        last_bullet_idx = bullet_indexes[-1]
+        trailing = lines[last_bullet_idx + 1 :]
+        while trailing and trailing[0] == "":
+            trailing.pop(0)
+        trailing_text = " ".join([t for t in trailing if t]).strip()
+        closing_line = _compress_trailing_text(trailing_text) if trailing_text else ""
+        lines = lines[: last_bullet_idx + 1]
+        if closing_line:
+            lines.append(closing_line)
 
-    return lines[: last_bullet_idx + 1]
+    return lines
 
 
 def format_tarot_answer(
@@ -473,6 +506,7 @@ def format_tarot_answer(
         if re.fullmatch(r"[-・\s]*メインメッセージ[:：]?\s*", cleaned):
             continue
         cleaned = cleaned.replace("【メインメッセージ】", "")
+        cleaned = _strip_meta_prefix(cleaned)
         cleaned = re.sub(r"^カード：", "引いたカード：", cleaned)
         cleaned = re.sub(r"^引いたカード[：:]", CARD_LINE_PREFIX, cleaned)
         cleaned = re.sub(r"^《?カード》?[：:]", CARD_LINE_PREFIX, cleaned)
@@ -506,7 +540,7 @@ def format_tarot_answer(
     while compacted and compacted[-1] == "":
         compacted.pop()
 
-    compacted = _merge_conclusion_into_bullet_list(compacted)
+    compacted = _finalize_tarot_lines(compacted)
     compacted = _inject_position_headings(compacted, position_labels)
     formatted = "\n".join(compacted)
     if len(formatted) > 1400:
