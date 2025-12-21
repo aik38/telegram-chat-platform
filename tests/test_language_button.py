@@ -17,6 +17,8 @@ def _collect_button_texts(markup: InlineKeyboardMarkup) -> list[str]:
         ("🌐 Language", "en"),
         ("言語設定", "ja"),
         ("Idioma", "pt"),
+        ("🌐Language", "en"),
+        ("🌐　言語設定", "ja"),
     ],
 )
 def test_language_reply_button_shows_picker(monkeypatch, tmp_path, button_text, user_lang):

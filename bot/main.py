@@ -1302,17 +1302,33 @@ def build_lang_keyboard(lang: str | None = "ja") -> InlineKeyboardMarkup:
 def _normalize_language_button_text(text: str) -> str:
     if not text:
         return ""
-    return text.strip().removeprefix("🌐").strip()
+    normalized = text.strip()
+    # Remove common globe emojis and variation selectors at the start.
+    for prefix in ("🌐", "🌍", "🌎", "🌏"):
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix):]
+            break
+    normalized = normalized.lstrip("\ufe0f").strip()
+    return normalized
 
 
 def _is_language_button_text(text: str) -> bool:
-    normalized = (text or "").strip()
-    normalized_no_emoji = _normalize_language_button_text(text)
+    raw = (text or "").strip()
+    normalized = _normalize_language_button_text(raw)
+    if not normalized:
+        return False
+
     candidates = set()
     for label in LANGUAGE_BUTTON_LABELS.values():
         candidates.add(label.strip())
         candidates.add(_normalize_language_button_text(label))
-    return normalized in candidates or normalized_no_emoji in candidates
+        candidates.add(_normalize_language_button_text(label).casefold())
+
+    return (
+        raw in candidates
+        or normalized in candidates
+        or normalized.casefold() in candidates
+    )
 
 
 def _extract_start_payload(message: Message) -> str | None:
