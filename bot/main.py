@@ -420,6 +420,7 @@ LANGUAGE_BUTTON_LABELS = {
     lang: t(lang, "MENU_LANGUAGE_LABEL") for lang in SUPPORTED_LANGS
 }
 GLOBE_EMOJI_PREFIXES = ("🌐", "🌍", "🌎", "🌏")
+_VARIATION_SELECTOR_RE = re.compile(r"[\ufe00-\ufe0f\U000e0100-\U000e01ef]")
 
 
 def _get_theme_labels(lang: str) -> dict[str, str]:
@@ -1301,12 +1302,26 @@ def build_lang_keyboard(lang: str | None = "ja") -> InlineKeyboardMarkup:
     )
 
 
+def _strip_invisible(text: str) -> str:
+    if not text:
+        return ""
+    stripped_chars: list[str] = []
+    for ch in text:
+        if _VARIATION_SELECTOR_RE.match(ch):
+            continue
+        category = unicodedata.category(ch)
+        if category in {"Cf", "Cc"}:
+            continue
+        stripped_chars.append(ch)
+    return "".join(stripped_chars)
+
+
 def _normalize_language_button_text(text: str) -> str:
     if not text:
         return ""
     normalized = unicodedata.normalize("NFKC", text)
     normalized = normalized.replace("\ufe0e", "").replace("\ufe0f", "")
-    normalized = "".join(ch for ch in normalized if unicodedata.category(ch) != "Cf")
+    normalized = _strip_invisible(normalized)
     normalized = normalized.strip()
     for prefix in GLOBE_EMOJI_PREFIXES:
         if normalized.startswith(prefix):
@@ -1322,7 +1337,7 @@ def _has_language_button_prefix(text: str) -> bool:
         return False
     normalized = unicodedata.normalize("NFKC", text)
     normalized = normalized.replace("\ufe0e", "").replace("\ufe0f", "")
-    normalized = "".join(ch for ch in normalized if unicodedata.category(ch) != "Cf")
+    normalized = _strip_invisible(normalized)
     return normalized.lstrip().startswith(GLOBE_EMOJI_PREFIXES)
 
 

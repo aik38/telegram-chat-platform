@@ -23,6 +23,8 @@ def _collect_button_texts(markup: InlineKeyboardMarkup) -> list[str]:
         ("🌐\u3000Language", "en"),
         ("🌐\ufe0f Language", "en"),
         ("\u200b🌐 Language", "en"),
+        ("\ufeff🌐 Language", "en"),
+        ("\u200f🌐 Language", "en"),
         ("🌐 言語設定", "ja"),
         ("🌐 Idioma", "pt"),
     ],
