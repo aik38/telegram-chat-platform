@@ -1501,6 +1501,22 @@ def get_menu_prompt_text(lang: str | None = "ja") -> str:
     return prompts.get(lang_code, prompts["ja"])
 
 
+async def restore_base_menu(message: Message, user_id: int | None, lang: str) -> None:
+    lang_code = normalize_lang(lang or "ja")
+    prompts = {
+        "ja": "ボタンから選択してね👇",
+        "en": "Choose from the buttons below 👇",
+        "pt": "Escolha pelos botões abaixo 👇",
+    }
+    restore_text = prompts.get(lang_code, prompts["ja"])
+    if not restore_text.strip():
+        restore_text = prompts["ja"]
+    await message.answer(
+        restore_text,
+        reply_markup=build_base_menu(user_id),
+    )
+
+
 def get_chat_id(message: Message) -> int | None:
     chat = getattr(message, "chat", None)
     if chat and getattr(chat, "id", None) is not None:
@@ -3382,10 +3398,7 @@ async def handle_tarot_reading(
             await message.answer(
                 formatted_answer, reply_markup=upgrade_markup or build_quick_menu(user_id)
             )
-        await message.answer(
-            "\u200b",
-            reply_markup=build_base_menu(user_id),
-        )
+        await restore_base_menu(message, user_id, lang_code)
         event_success = True
     except Exception:
         logger.exception("Unexpected error during tarot reading")
@@ -3585,6 +3598,7 @@ async def handle_general_chat(message: Message, user_query: str) -> None:
             )
         else:
             await message.answer(safe_answer, reply_markup=build_base_menu(user_id))
+        await restore_base_menu(message, user_id, lang)
         event_success = True
     except Exception:
         logger.exception("Unexpected error during general chat")
