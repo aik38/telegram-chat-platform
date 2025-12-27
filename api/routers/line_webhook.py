@@ -138,21 +138,21 @@ async def _handle_message_event(
 @router.post("/webhooks/line")
 async def handle_line_webhook(
     request: Request,
-    x_line_signature: str | None = Header(default=None),
+    x_line_signature: str | None = Header(default=None, alias="X-Line-Signature"),
     db: CommonBackendDB = Depends(common_backend.get_db),
     line_client: LineReplyClient = Depends(get_line_client),
 ) -> dict[str, str]:
+    if not x_line_signature:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing X-Line-Signature header",
+        )
+
     channel_secret = os.getenv("LINE_CHANNEL_SECRET")
     if not channel_secret:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="LINE_CHANNEL_SECRET is not configured",
-        )
-
-    if not x_line_signature:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Missing X-Line-Signature header",
         )
 
     body = await request.body()
