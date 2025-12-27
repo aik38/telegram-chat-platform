@@ -13,7 +13,9 @@ def assert_not_implemented(path: str) -> None:
 
 
 def test_line_prince_webhook_placeholder() -> None:
-    assert_not_implemented("/webhooks/line")
+    response = client.post("/webhooks/line")
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Missing X-Line-Signature header"}
 
 
 def test_stripe_webhook_placeholder() -> None:
