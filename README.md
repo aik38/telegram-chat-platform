@@ -206,6 +206,10 @@ git add .; `
 git commit -m "Update tarot bot from local"; `
 git push origin main
 
+ngrokを起動（すでにOKならそのまま）
+ngrok http 8000
+ブラウザで http://127.0.0.1:4040 を開く
+
 ## Dev routine (daily)
 1) Run `tools/sync.ps1` (= telegram sync): `git pull --rebase` → `.venv\Scripts\python.exe -m pytest -q` → 変更があれば commit/push（junk だけなら commit しない）。
 2) Pick next item from `docs/WBS.md` (Next 10 tasks)
