@@ -53,10 +53,12 @@ def is_premium_user(user_id: int | None, *, now: datetime | None = None) -> bool
     return has_active_pass(user_id, now=now)
 
 
-def get_user_with_default(user_id: int | None):
+def get_user_with_default(
+    user_id: int | None, now: datetime | None = None, **_kwargs
+):
     if user_id is None:
         return None
-    return get_user(user_id)
+    return get_user(user_id, now=now)
 
 
 def _user_pass_expiry(user: UserRecord | None, now: datetime) -> datetime | None:

@@ -59,11 +59,11 @@ TEXTS = {
         "Light chat ticket (100⭐️ / ~15 messages, first purchase gets +15 bonus = ~30 total)\n"
         "Solid chat ticket (300⭐️ / ~50 messages) / Deep chat ticket (500⭐️ / ~100 messages)\n"
         "7-day pass (30 msgs/day) / 30-day pass (50 msgs/day)\n"
-        "Note: Message counts are estimates. Length affects usage (internally token-based).\n"
+        "Message counts are estimates and may vary with reply length.\n"
     ),
     "ARISA_OUT_OF_CREDITS": (
         "You’re out of tickets. Please top up via /store.\n"
-        "Note: Message counts are estimates. Length affects usage (internally token-based)."
+        "Message counts are estimates and may vary with reply length."
     ),
     "ARISA_SEXY_LOCKED_TEASER": "A slightly grown-up chat unlocks after your first purchase.",
     "ARISA_SEXY_LOCKED_CTA": "See details in /store.",
@@ -74,7 +74,8 @@ TEXTS = {
     "ARISA_STATUS_PASS_NONE": "• Pass: none",
     "ARISA_STATUS_SEXY_UNLOCKED": "• Sexy: unlocked",
     "ARISA_STATUS_SEXY_LOCKED": "• Sexy: locked (unlocks after first purchase)",
-    "ARISA_STATUS_NOTE_TOKENS": "Note: 1 msg ≈ {tokens} tokens",
+    "ARISA_STATUS_NOTE_TOKENS": "Message counts are estimates and may vary with reply length.",
+    "ARISA_USER_LOAD_ERROR": "Sorry, something seems off. Could you send that again?",
     "HELP_TEXT_TEMPLATE": (
         "❓ How to use\n"
         "\n"

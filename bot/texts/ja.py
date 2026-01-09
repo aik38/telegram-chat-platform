@@ -96,11 +96,11 @@ ARISA_STORE_INTRO_TEXT = (
     "ライト会話チケット（100⭐️/約15通、初回購入は+15通ボーナスで合計30通相当）\n"
     "しっかり会話チケット（300⭐️/約50通）／じっくり会話チケット（500⭐️/約100通）\n"
     "7日パス（1日上限30通）／30日パス（1日上限50通）\n"
-    "※回数は目安です。会話の長さにより前後します（内部はトークンで計算）。\n"
+    "※通数は目安。会話の長さにより前後します。\n"
 )
 ARISA_OUT_OF_CREDITS = (
     "チケット残がありません。/store からチャージをお願いします。\n"
-    "※回数は目安です。会話の長さにより前後します（内部はトークンで計算）。"
+    "※通数は目安。会話の長さにより前後します。"
 )
 ARISA_SEXY_LOCKED_TEASER = (
     "少し大人寄りの会話は、チャージ後に解放されます。"
@@ -113,7 +113,8 @@ ARISA_STATUS_PASS_ACTIVE = "・パス: {pass_label}（本日の残り {remaining
 ARISA_STATUS_PASS_NONE = "・パス: なし"
 ARISA_STATUS_SEXY_UNLOCKED = "・セクシー: 解放済み"
 ARISA_STATUS_SEXY_LOCKED = "・セクシー: ロック中（初回課金で解放）"
-ARISA_STATUS_NOTE_TOKENS = "※1通≒{tokens} tokens"
+ARISA_STATUS_NOTE_TOKENS = "※通数は目安。会話の長さにより前後します。"
+ARISA_USER_LOAD_ERROR = "ごめんね、少し調整中みたい。もう一度送ってくれる？"
 
 NON_CONSULT_OUT_OF_QUOTA_MESSAGE = (
     "このボットはタロット占い・相談用です。占いは /read1、恋愛は /love1 などをご利用"
