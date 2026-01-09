@@ -61,11 +61,11 @@ TEXTS = {
         "Ticket leve (100⭐️ / ~15 mensagens, primeira compra ganha +15 = ~30 no total)\n"
         "Ticket sólido (300⭐️ / ~50 mensagens) / Ticket profundo (500⭐️ / ~100 mensagens)\n"
         "Passe 7 dias (30 msgs/dia) / Passe 30 dias (50 msgs/dia)\n"
-        "Observação: a contagem é estimada. O tamanho da conversa altera o uso (por tokens).\n"
+        "A quantidade de mensagens é aproximada e pode variar conforme o tamanho da resposta.\n"
     ),
     "ARISA_OUT_OF_CREDITS": (
         "Você ficou sem tickets. Recarregue em /store.\n"
-        "Observação: a contagem é estimada. O tamanho da conversa altera o uso (por tokens)."
+        "A quantidade de mensagens é aproximada e pode variar conforme o tamanho da resposta."
     ),
     "ARISA_SEXY_LOCKED_TEASER": "O papo mais adulto libera após a primeira compra.",
     "ARISA_SEXY_LOCKED_CTA": "Veja detalhes em /store.",
@@ -76,7 +76,10 @@ TEXTS = {
     "ARISA_STATUS_PASS_NONE": "• Passe: nenhum",
     "ARISA_STATUS_SEXY_UNLOCKED": "• Sexy: liberado",
     "ARISA_STATUS_SEXY_LOCKED": "• Sexy: bloqueado (libera após a primeira compra)",
-    "ARISA_STATUS_NOTE_TOKENS": "Obs.: 1 msg ≈ {tokens} tokens",
+    "ARISA_STATUS_NOTE_TOKENS": (
+        "A quantidade de mensagens é aproximada e pode variar conforme o tamanho da resposta."
+    ),
+    "ARISA_USER_LOAD_ERROR": "Desculpa, parece que estamos ajustando aqui. Pode enviar de novo?",
     "HELP_TEXT_TEMPLATE": (
         "❓ Como usar\n"
         "\n"

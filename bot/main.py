@@ -4262,9 +4262,16 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
     if user_id is None:
         await message.answer(t("ja", "USER_INFO_MISSING"))
         return
-    ensure_user(user_id, now=now)
-    ensure_arisa_trial(user_id, now=now)
-    user = get_user_with_default(user_id, now=now) or ensure_user(user_id, now=now)
+    try:
+        ensure_user(user_id, now=now)
+        ensure_arisa_trial(user_id, now=now)
+        user = get_user_with_default(user_id, now=now) or ensure_user(user_id, now=now)
+    except Exception:
+        logger.exception("Failed to load Arisa user")
+        await message.answer(
+            t(lang, "ARISA_USER_LOAD_ERROR"), reply_markup=build_arisa_menu(user_id)
+        )
+        return
     if _arisa_available_credits(user, now=now) <= 0:
         await message.answer(
             t(lang, "ARISA_OUT_OF_CREDITS"),
