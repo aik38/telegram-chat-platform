@@ -50,7 +50,7 @@ pip install -r requirements.txt
 - PowerShell での起動例:
 
   ```powershell
-  cd "...\telegram-tarot-bot"
+  cd "...\telegram-chat-platform"
   .\.venv\Scripts\Activate.ps1
   $env:ADMIN_USER_IDS="1357890414"
   python -m bot.main
@@ -207,32 +207,32 @@ python -m pytest -q
 ### 最短ワンライナー
 
 ```powershell
-$repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-tarot-bot"; cd $repo; .\.venv\Scripts\Activate.ps1; .\tools\run_line_api.ps1
+$repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-chat-platform"; cd $repo; .\.venv\Scripts\Activate.ps1; .\tools\run_line_api.ps1
 ```
 
 別ウィンドウで ngrok:
 
 ```powershell
-$repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-tarot-bot"; cd $repo; .\tools\run_ngrok.ps1
+$repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-chat-platform"; cd $repo; .\tools\run_ngrok.ps1
 ```
 
 ### 手順（詳細）
 
 1. API（uvicorn）起動（別ウィンドウ推奨）
    ```powershell
-   $repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-tarot-bot"; cd $repo; .\.venv\Scripts\Activate.ps1; .\tools\run_line_api.ps1
+   $repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-chat-platform"; cd $repo; .\.venv\Scripts\Activate.ps1; .\tools\run_line_api.ps1
    ```
 2. ngrok 起動（別ウィンドウ）
    ```powershell
-   $repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-tarot-bot"; cd $repo; .\tools\run_ngrok.ps1
+   $repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-chat-platform"; cd $repo; .\tools\run_ngrok.ps1
    ```
 3. `/docs` が 200 になることを確認
    ```powershell
-   $repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-tarot-bot"; cd $repo; .\.venv\Scripts\Activate.ps1; (Invoke-WebRequest http://127.0.0.1:8000/docs -UseBasicParsing -TimeoutSec 5).StatusCode
+   $repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-chat-platform"; cd $repo; .\.venv\Scripts\Activate.ps1; (Invoke-WebRequest http://127.0.0.1:8000/docs -UseBasicParsing -TimeoutSec 5).StatusCode
    ```
 4. tools の疎通テスト（任意）
    ```powershell
-   $repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-tarot-bot"; cd $repo; .\.venv\Scripts\Activate.ps1; python .\tools\test_line_webhook.py
+   $repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-chat-platform"; cd $repo; .\.venv\Scripts\Activate.ps1; python .\tools\test_line_webhook.py
    ```
 
 ### 動作確認ポイント
@@ -254,18 +254,18 @@ $repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-tarot-b
 - 接続拒否 → uvicorn が起動していない、またはポート指定が間違っている。
 
 ## セットアップ
-cd "%USERPROFILE%\OneDrive\デスクトップ\telegram-tarot-bot"
+cd "%USERPROFILE%\OneDrive\デスクトップ\telegram-chat-platform"
 .\.venv\Scripts\Activate
 pip install -r requirements.txt
 
 ## 起動
-cd "%USERPROFILE%\OneDrive\デスクトップ\telegram-tarot-bot"
+cd "%USERPROFILE%\OneDrive\デスクトップ\telegram-chat-platform"
 .\.venv\Scripts\Activate
 python -m bot.main
 
 ###　Codexで修正後のプル・プッシュ
 
-cd "$env:USERPROFILE\OneDrive\デスクトップ\telegram-tarot-bot"; `
+cd "$env:USERPROFILE\OneDrive\デスクトップ\telegram-chat-platform"; `
 git pull --rebase origin main; `
 git add .; `
 git commit -m "Update tarot bot from local"; `
