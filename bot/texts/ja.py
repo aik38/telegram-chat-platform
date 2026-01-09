@@ -92,9 +92,28 @@ STORE_INTRO_TEXT = (
     "Stars はアカウント内に残り、余った分は次回も使えます。\n"
 )
 ARISA_STORE_INTRO_TEXT = (
-    "購入後は、そのまま恋愛/雑談の会話に戻れます。\n"
-    "Stars はアカウント内に残り、余った分は次回も使えます。\n"
+    "恋愛/雑談トーク用のチケットとパスです。\n"
+    "ライト会話チケット（100⭐️/約15通、初回購入は+15通ボーナスで合計30通相当）\n"
+    "しっかり会話チケット（300⭐️/約50通）／じっくり会話チケット（500⭐️/約100通）\n"
+    "7日パス（1日上限30通）／30日パス（1日上限50通）\n"
+    "※回数は目安です。会話の長さにより前後します（内部はトークンで計算）。\n"
 )
+ARISA_OUT_OF_CREDITS = (
+    "チケット残がありません。/store からチャージをお願いします。\n"
+    "※回数は目安です。会話の長さにより前後します（内部はトークンで計算）。"
+)
+ARISA_SEXY_LOCKED_TEASER = (
+    "少し大人寄りの会話は、チャージ後に解放されます。"
+)
+ARISA_SEXY_LOCKED_CTA = "詳しくは /store を見てね。"
+ARISA_STATUS_TITLE = "📊現在のご利用状況です。"
+ARISA_STATUS_CREDITS_LINE = "・チケット残: 約{credits}通"
+ARISA_STATUS_TRIAL_LINE = "・初回無料: 残り {trial} 通"
+ARISA_STATUS_PASS_ACTIVE = "・パス: {pass_label}（本日の残り {remaining} 通）"
+ARISA_STATUS_PASS_NONE = "・パス: なし"
+ARISA_STATUS_SEXY_UNLOCKED = "・セクシー: 解放済み"
+ARISA_STATUS_SEXY_LOCKED = "・セクシー: ロック中（初回課金で解放）"
+ARISA_STATUS_NOTE_TOKENS = "※1通≒{tokens} tokens"
 
 NON_CONSULT_OUT_OF_QUOTA_MESSAGE = (
     "このボットはタロット占い・相談用です。占いは /read1、恋愛は /love1 などをご利用"
@@ -168,6 +187,18 @@ ARISA_PRODUCT_TICKET_10_TITLE = "じっくり対話チケット"
 ARISA_PRODUCT_TICKET_10_DESCRIPTION = "ゆっくり話したいときの特別チケットです。"
 ARISA_PRODUCT_ADDON_IMAGES_TITLE = "画像追加オプション"
 ARISA_PRODUCT_ADDON_IMAGES_DESCRIPTION = "会話の雰囲気に合う画像を添えるオプションを有効化します。"
+ARISA_PRODUCT_ARISA_CREDIT_100_TITLE = "ライト会話チケット（約15通）"
+ARISA_PRODUCT_ARISA_CREDIT_100_DESCRIPTION = (
+    "100⭐️の会話チケットです（初回購入のみ+15通ボーナス）。"
+)
+ARISA_PRODUCT_ARISA_CREDIT_300_TITLE = "しっかり会話チケット（約50通）"
+ARISA_PRODUCT_ARISA_CREDIT_300_DESCRIPTION = "300⭐️の会話チケットです。"
+ARISA_PRODUCT_ARISA_CREDIT_500_TITLE = "じっくり会話チケット（約100通）"
+ARISA_PRODUCT_ARISA_CREDIT_500_DESCRIPTION = "500⭐️の会話チケットです。"
+ARISA_PRODUCT_ARISA_PASS_7D_TITLE = "7日パス（1日上限30通）"
+ARISA_PRODUCT_ARISA_PASS_7D_DESCRIPTION = "7日間、1日30通までの会話パスです。"
+ARISA_PRODUCT_ARISA_PASS_30D_TITLE = "30日パス（1日上限50通）"
+ARISA_PRODUCT_ARISA_PASS_30D_DESCRIPTION = "30日間、1日50通までの会話パスです。"
 PASS_EXTENDED_TEXT = "有効期限を更新しました。"
 UNLOCK_TICKET_ADDED = "{product}を追加しました。現在の残り枚数は {balance} 枚です。"
 UNLOCK_PASS_GRANTED = "{duration}を付与しました。\n有効期限: {until_text}{remaining_hint}"
@@ -218,6 +249,7 @@ OPENING_PAYMENT_SCREEN = "お支払い画面を開きます。ゆっくり進め
 PURCHASE_THANK_YOU = "{product}のご購入ありがとうございました！"
 PURCHASE_STATUS_REMINDER = "付与内容は /status でも確認できます。"
 PURCHASE_NAVIGATION_HINT = "下のボタンから占いに戻るか、ステータスを確認してください。"
+ARISA_PURCHASE_NAVIGATION_HINT = "下のボタンからステータス確認やチャージに進めます。"
 PAYMENT_ALREADY_PROCESSED = "このお支払いはすでに処理済みです。/status から利用状況をご確認ください。"
 PAYMENT_INFO_MISMATCH = "お支払い情報の確認に失敗しました。サポートまでお問い合わせください。\n処理は完了している場合がありますので、ご安心ください。"
 PAYMENT_VERIFICATION_DELAY = "お支払いは完了しましたが、購入情報の確認に少し時間がかかっています。\nお手数ですがサポートまでお問い合わせください。"

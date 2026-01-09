@@ -55,9 +55,26 @@ TEXTS = {
         "Stars stay on your account and any unused balance carries over.\n"
     ),
     "ARISA_STORE_INTRO_TEXT": (
-        "After purchase, you can jump right back into love talk or casual chat.\n"
-        "Stars stay on your account and any unused balance carries over.\n"
+        "Tickets and passes for love talk / casual chat.\n"
+        "Light chat ticket (100⭐️ / ~15 messages, first purchase gets +15 bonus = ~30 total)\n"
+        "Solid chat ticket (300⭐️ / ~50 messages) / Deep chat ticket (500⭐️ / ~100 messages)\n"
+        "7-day pass (30 msgs/day) / 30-day pass (50 msgs/day)\n"
+        "Note: Message counts are estimates. Length affects usage (internally token-based).\n"
     ),
+    "ARISA_OUT_OF_CREDITS": (
+        "You’re out of tickets. Please top up via /store.\n"
+        "Note: Message counts are estimates. Length affects usage (internally token-based)."
+    ),
+    "ARISA_SEXY_LOCKED_TEASER": "A slightly grown-up chat unlocks after your first purchase.",
+    "ARISA_SEXY_LOCKED_CTA": "See details in /store.",
+    "ARISA_STATUS_TITLE": "📊 Your current status.",
+    "ARISA_STATUS_CREDITS_LINE": "• Tickets left: ~{credits} messages",
+    "ARISA_STATUS_TRIAL_LINE": "• Trial: {trial} messages left",
+    "ARISA_STATUS_PASS_ACTIVE": "• Pass: {pass_label} (remaining today: {remaining})",
+    "ARISA_STATUS_PASS_NONE": "• Pass: none",
+    "ARISA_STATUS_SEXY_UNLOCKED": "• Sexy: unlocked",
+    "ARISA_STATUS_SEXY_LOCKED": "• Sexy: locked (unlocks after first purchase)",
+    "ARISA_STATUS_NOTE_TOKENS": "Note: 1 msg ≈ {tokens} tokens",
     "HELP_TEXT_TEMPLATE": (
         "❓ How to use\n"
         "\n"
@@ -149,6 +166,18 @@ TEXTS = {
     "ARISA_PRODUCT_TICKET_10_DESCRIPTION": "A special ticket for taking your time and talking it through.",
     "ARISA_PRODUCT_ADDON_IMAGES_TITLE": "Image add-on",
     "ARISA_PRODUCT_ADDON_IMAGES_DESCRIPTION": "Enable a visual touch that matches the mood of your conversation.",
+    "ARISA_PRODUCT_ARISA_CREDIT_100_TITLE": "Light chat ticket (~15 msgs)",
+    "ARISA_PRODUCT_ARISA_CREDIT_100_DESCRIPTION": (
+        "100⭐️ ticket (~15 msgs). First purchase gets a +15 bonus."
+    ),
+    "ARISA_PRODUCT_ARISA_CREDIT_300_TITLE": "Solid chat ticket (~50 msgs)",
+    "ARISA_PRODUCT_ARISA_CREDIT_300_DESCRIPTION": "300⭐️ ticket (~50 msgs).",
+    "ARISA_PRODUCT_ARISA_CREDIT_500_TITLE": "Deep chat ticket (~100 msgs)",
+    "ARISA_PRODUCT_ARISA_CREDIT_500_DESCRIPTION": "500⭐️ ticket (~100 msgs).",
+    "ARISA_PRODUCT_ARISA_PASS_7D_TITLE": "7-day pass (30 msgs/day)",
+    "ARISA_PRODUCT_ARISA_PASS_7D_DESCRIPTION": "7-day pass with 30 messages per day.",
+    "ARISA_PRODUCT_ARISA_PASS_30D_TITLE": "30-day pass (50 msgs/day)",
+    "ARISA_PRODUCT_ARISA_PASS_30D_DESCRIPTION": "30-day pass with 50 messages per day.",
     "NON_CONSULT_OUT_OF_QUOTA_MESSAGE": (
         "This bot is for tarot readings and chat. Use /read1 for readings or /love1 for love topics. "
         "Top up via /buy."
@@ -271,6 +300,7 @@ TEXTS = {
     "PURCHASE_THANK_YOU": "Thank you for purchasing {product}!",
     "PURCHASE_STATUS_REMINDER": "You can also check the grant details via /status.",
     "PURCHASE_NAVIGATION_HINT": "Use the buttons below to return to Tarot or view your status.",
+    "ARISA_PURCHASE_NAVIGATION_HINT": "Use the buttons below to view status or return to the store.",
     "PAYMENT_ALREADY_PROCESSED": "This payment has already been processed. Check /status for details.",
     "PAYMENT_INFO_MISMATCH": (
         "We couldn't confirm the payment details. Please contact support.\n"
