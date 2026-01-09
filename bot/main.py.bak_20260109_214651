@@ -3866,7 +3866,7 @@ async def arisa_blocked_command(message: Message) -> None:
     await message.answer(_arisa_block_notice(), reply_markup=ReplyKeyboardRemove())
 
 
-@arisa_router.message(F.text.startswith("/"))
+@arisa_router.message(Command())
 async def arisa_other_command(message: Message) -> None:
     await message.answer(_arisa_block_notice(), reply_markup=ReplyKeyboardRemove())
 
@@ -4063,4 +4063,3 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
-
