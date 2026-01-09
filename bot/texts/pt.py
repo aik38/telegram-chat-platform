@@ -57,9 +57,26 @@ TEXTS = {
         "As Stars ficam na sua conta e o saldo continua disponível.\n"
     ),
     "ARISA_STORE_INTRO_TEXT": (
-        "Após a compra, você volta direto para o papo de amor ou conversa casual.\n"
-        "As Stars ficam na sua conta e o saldo restante pode ser usado depois.\n"
+        "Tickets e passes para papo de amor / conversa casual.\n"
+        "Ticket leve (100⭐️ / ~15 mensagens, primeira compra ganha +15 = ~30 no total)\n"
+        "Ticket sólido (300⭐️ / ~50 mensagens) / Ticket profundo (500⭐️ / ~100 mensagens)\n"
+        "Passe 7 dias (30 msgs/dia) / Passe 30 dias (50 msgs/dia)\n"
+        "Observação: a contagem é estimada. O tamanho da conversa altera o uso (por tokens).\n"
     ),
+    "ARISA_OUT_OF_CREDITS": (
+        "Você ficou sem tickets. Recarregue em /store.\n"
+        "Observação: a contagem é estimada. O tamanho da conversa altera o uso (por tokens)."
+    ),
+    "ARISA_SEXY_LOCKED_TEASER": "O papo mais adulto libera após a primeira compra.",
+    "ARISA_SEXY_LOCKED_CTA": "Veja detalhes em /store.",
+    "ARISA_STATUS_TITLE": "📊 Seu status atual.",
+    "ARISA_STATUS_CREDITS_LINE": "• Tickets restantes: ~{credits} mensagens",
+    "ARISA_STATUS_TRIAL_LINE": "• Teste: {trial} mensagens restantes",
+    "ARISA_STATUS_PASS_ACTIVE": "• Passe: {pass_label} (restam hoje: {remaining})",
+    "ARISA_STATUS_PASS_NONE": "• Passe: nenhum",
+    "ARISA_STATUS_SEXY_UNLOCKED": "• Sexy: liberado",
+    "ARISA_STATUS_SEXY_LOCKED": "• Sexy: bloqueado (libera após a primeira compra)",
+    "ARISA_STATUS_NOTE_TOKENS": "Obs.: 1 msg ≈ {tokens} tokens",
     "HELP_TEXT_TEMPLATE": (
         "❓ Como usar\n"
         "\n"
@@ -151,6 +168,18 @@ TEXTS = {
     "ARISA_PRODUCT_TICKET_10_DESCRIPTION": "Um ticket especial para conversar no seu ritmo.",
     "ARISA_PRODUCT_ADDON_IMAGES_TITLE": "Adicional de imagens",
     "ARISA_PRODUCT_ADDON_IMAGES_DESCRIPTION": "Ativa um toque visual que combina com o clima da conversa.",
+    "ARISA_PRODUCT_ARISA_CREDIT_100_TITLE": "Ticket leve (~15 msgs)",
+    "ARISA_PRODUCT_ARISA_CREDIT_100_DESCRIPTION": (
+        "Ticket de 100⭐️ (~15 msgs). Primeira compra ganha +15."
+    ),
+    "ARISA_PRODUCT_ARISA_CREDIT_300_TITLE": "Ticket sólido (~50 msgs)",
+    "ARISA_PRODUCT_ARISA_CREDIT_300_DESCRIPTION": "Ticket de 300⭐️ (~50 msgs).",
+    "ARISA_PRODUCT_ARISA_CREDIT_500_TITLE": "Ticket profundo (~100 msgs)",
+    "ARISA_PRODUCT_ARISA_CREDIT_500_DESCRIPTION": "Ticket de 500⭐️ (~100 msgs).",
+    "ARISA_PRODUCT_ARISA_PASS_7D_TITLE": "Passe 7 dias (30 msgs/dia)",
+    "ARISA_PRODUCT_ARISA_PASS_7D_DESCRIPTION": "Passe de 7 dias com 30 mensagens por dia.",
+    "ARISA_PRODUCT_ARISA_PASS_30D_TITLE": "Passe 30 dias (50 msgs/dia)",
+    "ARISA_PRODUCT_ARISA_PASS_30D_DESCRIPTION": "Passe de 30 dias com 50 mensagens por dia.",
     "NON_CONSULT_OUT_OF_QUOTA_MESSAGE": (
         "Este bot é para leituras de tarô e conversa. Use /read1 para leituras ou /love1 para temas de amor. "
         "Recarregue via /buy."
@@ -275,6 +304,7 @@ TEXTS = {
     "PURCHASE_THANK_YOU": "Obrigado por comprar {product}!",
     "PURCHASE_STATUS_REMINDER": "Você também pode ver os detalhes da concessão em /status.",
     "PURCHASE_NAVIGATION_HINT": "Use os botões abaixo para voltar ao Tarot ou ver seu status.",
+    "ARISA_PURCHASE_NAVIGATION_HINT": "Use os botões abaixo para ver o status ou voltar à loja.",
     "PAYMENT_ALREADY_PROCESSED": "Este pagamento já foi processado. Consulte /status para detalhes.",
     "PAYMENT_INFO_MISMATCH": (
         "Não foi possível confirmar os dados do pagamento. Fale com o suporte, por favor.\n"

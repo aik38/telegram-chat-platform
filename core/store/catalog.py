@@ -58,6 +58,41 @@ PRODUCTS: tuple[Product, ...] = (
         price_stars=500,
         kind="addon",
     ),
+    Product(
+        sku="ARISA_CREDIT_100",
+        title="ライト会話チケット",
+        description="会話チケット（約15通）です。",
+        price_stars=100,
+        kind="ticket",
+    ),
+    Product(
+        sku="ARISA_CREDIT_300",
+        title="しっかり会話チケット",
+        description="会話チケット（約50通）です。",
+        price_stars=300,
+        kind="ticket",
+    ),
+    Product(
+        sku="ARISA_CREDIT_500",
+        title="じっくり会話チケット",
+        description="会話チケット（約100通）です。",
+        price_stars=500,
+        kind="ticket",
+    ),
+    Product(
+        sku="ARISA_PASS_7D",
+        title="7日パス",
+        description="1日上限30通の7日パスです。",
+        price_stars=1190,
+        kind="pass",
+    ),
+    Product(
+        sku="ARISA_PASS_30D",
+        title="30日パス",
+        description="1日上限50通の30日パスです。",
+        price_stars=5990,
+        kind="pass",
+    ),
 )
 
 PRODUCT_INDEX: dict[str, Product] = {product.sku: product for product in PRODUCTS}

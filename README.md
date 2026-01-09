@@ -75,6 +75,17 @@ powershell -ExecutionPolicy Bypass -File scripts/run_default.ps1
 5. `/read1` `/buy` など未許可コマンドがブロック文言で返ることを確認。
 6. `scripts/run_default.ps1` で起動し、default の `/start` `/read1` が従来通り動作することを確認。
 
+### Arisa 収益化 v2（Stars + トークン課金）の簡易確認
+
+1. `.env.arisa` に `CHARACTER=arisa`, `ONE_MESSAGE_TOKENS=600`, `TRIAL_FREE_CREDITS=10` を設定して起動。
+2. 新規ユーザーで `/start` を送信し、初回10通の試用が付与されることを `/status` で確認。
+3. `/status` にチケット残・試用残・パス状態・Sexy解放が表示されることを確認。
+4. 「🔥セクシー」を押下し、未課金の場合はティーザー + `/store` 誘導になることを確認。
+5. 100⭐️購入で+15通、初回のみ追加+15通（合計30通相当）が付与されることを確認。
+6. 7日/30日パスを購入し、本日の残り回数が減ること・上限で止まることを確認。
+7. 言語を EN/PT に切り替えて `/store` `/status` が自然訳で表示されることを確認。
+8. `scripts/run_default.ps1` で起動し、占い/星の王子さまの文言や動作が変わらないことを確認。
+
 ### 主な環境変数
 
 - `.env.example` を `.env` にコピーして値を埋めてください。

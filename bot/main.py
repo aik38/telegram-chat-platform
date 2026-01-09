@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import math
 import os
 import random
 import re
@@ -55,10 +56,14 @@ from openai import (
 from core.config import (
     ADMIN_USER_IDS,
     OPENAI_API_KEY,
+    ONE_MESSAGE_TOKENS,
+    PASS_7D_DAILY_LIMIT,
+    PASS_30D_DAILY_LIMIT,
     SUPPORT_EMAIL,
     TELEGRAM_BOT_TOKEN,
     THROTTLE_CALLBACK_INTERVAL_SEC,
     THROTTLE_MESSAGE_INTERVAL_SEC,
+    TRIAL_FREE_CREDITS,
 )
 from core.db import (
     TicketColumn,
@@ -73,9 +78,12 @@ from core.db import (
     get_user,
     get_user_lang,
     grant_purchase,
+    has_app_event,
     has_accepted_terms,
+    has_payment_event,
     increment_general_chat_count,
     increment_one_oracle_count,
+    increment_arisa_pass_usage,
     log_audit,
     log_app_event,
     log_feedback,
@@ -85,6 +93,9 @@ from core.db import (
     set_user_lang,
     set_terms_accepted,
     set_last_general_chat_block_notice,
+    set_arisa_trial_remaining,
+    update_arisa_credits,
+    update_arisa_pass,
     revoke_purchase,
     USAGE_TIMEZONE,
 )
@@ -254,6 +265,16 @@ ARISA_TAROT_KEYWORDS = (
     "buy",
     "payment",
 )
+ARISA_CREDIT_PACKS: dict[str, int] = {
+    "ARISA_CREDIT_100": 15,
+    "ARISA_CREDIT_300": 50,
+    "ARISA_CREDIT_500": 100,
+}
+ARISA_FIRST_100_BONUS = 15
+ARISA_PASS_PRODUCTS: dict[str, dict[str, int]] = {
+    "ARISA_PASS_7D": {"days": 7, "daily_limit": PASS_7D_DAILY_LIMIT},
+    "ARISA_PASS_30D": {"days": 30, "daily_limit": PASS_30D_DAILY_LIMIT},
+}
 TAROT_THEME_LABELS_EN: dict[str, str] = {
     "love": "Love",
     "marriage": "Marriage",
@@ -1318,14 +1339,20 @@ def build_general_chat_messages(user_query: str, *, lang: str | None = "ja") -> 
     ]
 
 
-def build_arisa_messages(user_query: str, *, lang: str | None = "ja") -> list[dict[str, str]]:
+def build_arisa_messages(
+    user_query: str,
+    *,
+    lang: str | None = "ja",
+    paid: bool = False,
+    first_paid_turn: bool = False,
+) -> list[dict[str, str]]:
     """Arisaモードの system prompt を組み立てる。"""
     lang_code = normalize_lang(lang)
     system_prompt = get_consult_system_prompt(lang_code)
     boundary_lines = get_character_boundary_lines()
     internal_flags = (
-        'MODE: "FREE"\n'
-        'FIRST_PAID_TURN: "false"\n'
+        f'MODE: "{ "PAID" if paid else "FREE" }"\n'
+        f'FIRST_PAID_TURN: "{ "true" if first_paid_turn else "false" }"\n'
         f'LANG: "{lang_code}"'
     )
     parts = [system_prompt]
@@ -1394,6 +1421,68 @@ async def call_openai_with_retry(
         await asyncio.sleep(delay)
 
     return t(lang_code, "OPENAI_COMMUNICATION_ERROR"), False
+
+
+async def call_openai_with_retry_and_usage(
+    messages: Iterable[dict[str, str]], *, lang: str | None = "ja"
+) -> tuple[str, bool, int | None]:
+    prepared_messages = list(messages)
+    max_attempts = 3
+    base_delay = 1.5
+    lang_code = normalize_lang(lang)
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            completion = await asyncio.get_running_loop().run_in_executor(
+                None,
+                lambda: client.chat.completions.create(
+                    model="gpt-4o-mini", messages=prepared_messages
+                ),
+            )
+            answer = completion.choices[0].message.content
+            usage = getattr(completion, "usage", None)
+            total_tokens = getattr(usage, "total_tokens", None) if usage else None
+            return postprocess_llm_text(answer, lang=lang_code), False, total_tokens
+        except (AuthenticationError, PermissionDeniedError, BadRequestError) as exc:
+            logger.exception("Fatal OpenAI error: %s", exc)
+            return (
+                t(lang_code, "OPENAI_FATAL_ERROR"),
+                True,
+                None,
+            )
+        except (APITimeoutError, APIConnectionError, RateLimitError) as exc:
+            logger.warning(
+                "Transient OpenAI error on attempt %s/%s: %s",
+                attempt,
+                max_attempts,
+                exc,
+                exc_info=True,
+            )
+            if attempt == max_attempts:
+                break
+        except APIError as exc:
+            logger.warning(
+                "APIError on attempt %s/%s (status=%s): %s",
+                attempt,
+                max_attempts,
+                getattr(exc, "status", None),
+                exc,
+                exc_info=True,
+            )
+            if getattr(exc, "status", 500) >= 500 and attempt < max_attempts:
+                pass
+            else:
+                return (
+                    t(lang_code, "OPENAI_PROCESSING_ERROR"),
+                    True,
+                    None,
+                )
+
+        delay = base_delay * (2 ** (attempt - 1))
+        delay += random.uniform(0, 0.5)
+        await asyncio.sleep(delay)
+
+    return t(lang_code, "OPENAI_COMMUNICATION_ERROR"), False, None
 
 
 def _preview_text(text: str, limit: int = 80) -> str:
@@ -1900,9 +1989,11 @@ async def prompt_arisa_status(message: Message, *, now: datetime) -> None:
             reply_markup=build_arisa_menu(user_id),
         )
         return
+    ensure_arisa_trial(user_id, now=now)
     user = get_user_with_default(user_id) or ensure_user(user_id, now=now)
     await message.answer(
-        format_status(user, now=now, lang=lang), reply_markup=build_arisa_menu(user_id)
+        format_arisa_status(user, now=now, lang=lang),
+        reply_markup=build_arisa_menu(user_id),
     )
 
 
@@ -2172,6 +2263,155 @@ def get_store_intro_text(lang: str | None = "ja") -> str:
         if arisa_text != "ARISA_STORE_INTRO_TEXT":
             return arisa_text
     return t(lang_code, "STORE_INTRO_TEXT")
+
+
+def _arisa_pass_label(
+    user: UserRecord, *, now: datetime, lang: str | None = "ja"
+) -> str:
+    if not user.arisa_pass_until:
+        return t(lang, "ARISA_STATUS_PASS_NONE")
+    pass_until = user.arisa_pass_until.astimezone(USAGE_TIMEZONE).strftime(
+        "%Y-%m-%d %H:%M JST"
+    )
+    label = pass_until
+    if user.arisa_pass_daily_limit == PASS_7D_DAILY_LIMIT:
+        product = get_product("ARISA_PASS_7D")
+        if product:
+            label = f"{_get_product_title(product, normalize_lang(lang))} / {pass_until}"
+    elif user.arisa_pass_daily_limit == PASS_30D_DAILY_LIMIT:
+        product = get_product("ARISA_PASS_30D")
+        if product:
+            label = f"{_get_product_title(product, normalize_lang(lang))} / {pass_until}"
+    return label
+
+
+def _arisa_pass_remaining(user: UserRecord, *, now: datetime) -> int:
+    if not user.arisa_pass_until or user.arisa_pass_until <= now:
+        return 0
+    used_today = user.arisa_pass_used_today
+    if user.arisa_pass_usage_date != _usage_today(now):
+        used_today = 0
+    pass_limit = user.arisa_pass_daily_limit or 0
+    return max(pass_limit - used_today, 0)
+
+
+def is_arisa_paid_user(
+    user_id: int, *, user: UserRecord | None = None, now: datetime | None = None
+) -> bool:
+    now = now or utcnow()
+    if user is None:
+        user = get_user_with_default(user_id, now=now)
+    if user and user.arisa_pass_until and user.arisa_pass_until > now:
+        return True
+    return has_payment_event(
+        user_id=user_id, event_type="successful_payment", sku_prefix="ARISA_"
+    )
+
+
+def ensure_arisa_trial(user_id: int, *, now: datetime | None = None) -> None:
+    if TRIAL_FREE_CREDITS <= 0:
+        return
+    now = now or utcnow()
+    if has_app_event(user_id=user_id, event_type="arisa_trial_granted"):
+        return
+    set_arisa_trial_remaining(user_id, remaining=TRIAL_FREE_CREDITS, now=now)
+    _safe_log_app_event(
+        event_type="arisa_trial_granted",
+        user_id=user_id,
+        payload=json.dumps({"credits": TRIAL_FREE_CREDITS}),
+    )
+
+
+def _arisa_credits_used(total_tokens: int | None) -> int:
+    if not total_tokens or total_tokens <= 0:
+        return 1
+    return max(1, math.ceil(total_tokens / ONE_MESSAGE_TOKENS))
+
+
+def _arisa_available_credits(user: UserRecord, *, now: datetime) -> int:
+    return (
+        _arisa_pass_remaining(user, now=now)
+        + user.arisa_credits
+        + user.arisa_trial_remaining
+    )
+
+
+def _consume_arisa_credits(
+    user_id: int,
+    user: UserRecord,
+    *,
+    credits_used: int,
+    now: datetime,
+) -> tuple[dict[str, int], int]:
+    remaining = credits_used
+    sources: dict[str, int] = {}
+    pass_remaining = _arisa_pass_remaining(user, now=now)
+    if pass_remaining > 0 and remaining > 0:
+        use = min(pass_remaining, remaining)
+        increment_arisa_pass_usage(user_id, amount=use, now=now)
+        sources["pass"] = use
+        remaining -= use
+    if remaining > 0 and user.arisa_credits > 0:
+        use = min(user.arisa_credits, remaining)
+        update_arisa_credits(user_id, delta=-use, now=now)
+        sources["ticket"] = use
+        remaining -= use
+    if remaining > 0 and user.arisa_trial_remaining > 0:
+        use = min(user.arisa_trial_remaining, remaining)
+        set_arisa_trial_remaining(
+            user_id, remaining=user.arisa_trial_remaining - use, now=now
+        )
+        sources["trial"] = use
+        remaining -= use
+    return sources, remaining
+
+
+def _extend_arisa_pass(user: UserRecord, *, days: int, now: datetime) -> datetime:
+    base = user.arisa_pass_until if user.arisa_pass_until and user.arisa_pass_until > now else now
+    return base + timedelta(days=days)
+
+
+def format_arisa_status(
+    user: UserRecord, *, now: datetime | None = None, lang: str | None = "ja"
+) -> str:
+    now = now or utcnow()
+    lang_code = normalize_lang(lang)
+    pass_active = bool(user.arisa_pass_until and user.arisa_pass_until > now)
+    remaining_today = _arisa_pass_remaining(user, now=now) if pass_active else 0
+    paid_user = is_arisa_paid_user(user.user_id, user=user, now=now)
+    lines = [
+        t(lang_code, "ARISA_STATUS_TITLE"),
+        t(lang_code, "ARISA_STATUS_CREDITS_LINE", credits=user.arisa_credits),
+    ]
+    if user.arisa_trial_remaining > 0:
+        lines.append(
+            t(lang_code, "ARISA_STATUS_TRIAL_LINE", trial=user.arisa_trial_remaining)
+        )
+    if pass_active:
+        lines.append(
+            t(
+                lang_code,
+                "ARISA_STATUS_PASS_ACTIVE",
+                pass_label=_arisa_pass_label(user, now=now, lang=lang_code),
+                remaining=remaining_today,
+            )
+        )
+    else:
+        lines.append(t(lang_code, "ARISA_STATUS_PASS_NONE"))
+    lines.append(
+        t(
+            lang_code,
+            "ARISA_STATUS_SEXY_UNLOCKED" if paid_user else "ARISA_STATUS_SEXY_LOCKED",
+        )
+    )
+    lines.append(
+        t(
+            lang_code,
+            "ARISA_STATUS_NOTE_TOKENS",
+            tokens=ONE_MESSAGE_TOKENS,
+        )
+    )
+    return "\n".join(lines)
 
 
 def consume_ticket_for_spread(user_id: int, spread: Spread) -> bool:
@@ -2597,10 +2837,19 @@ def _get_product_description(product: Product, lang: str) -> str:
     return t(lang, f"PRODUCT_{product.sku}_DESCRIPTION")
 
 
+def _is_arisa_product(product: Product) -> bool:
+    return product.sku.startswith("ARISA_")
+
+
 def build_store_keyboard(lang: str | None = "ja") -> InlineKeyboardMarkup:
     lang_code = normalize_lang(lang)
     rows: list[list[InlineKeyboardButton]] = []
     for product in iter_products():
+        if BOT_MODE == "arisa":
+            if not _is_arisa_product(product):
+                continue
+        elif _is_arisa_product(product):
+            continue
         if product.sku == "ADDON_IMAGES" and not IMAGE_ADDON_ENABLED:
             rows.append(
                 [
@@ -2632,12 +2881,66 @@ def build_purchase_followup_keyboard(lang: str | None = "ja") -> InlineKeyboardM
     )
 
 
+def build_arisa_purchase_followup_keyboard(
+    lang: str | None = "ja",
+) -> InlineKeyboardMarkup:
+    lang_code = normalize_lang(lang)
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=t(lang_code, "VIEW_STATUS_BUTTON"), callback_data="nav:status")],
+            [InlineKeyboardButton(text=t(lang_code, "GO_TO_STORE_BUTTON"), callback_data="nav:charge")],
+        ]
+    )
+
+
 async def send_store_menu(message: Message) -> None:
     user_id = message.from_user.id if message.from_user else None
     lang = get_user_lang_or_default(user_id)
     await message.answer(
         get_store_intro_text(lang=lang), reply_markup=build_store_keyboard(lang=lang)
     )
+
+
+def _grant_arisa_product(
+    user_id: int, product: Product, *, now: datetime
+) -> tuple[UserRecord, dict[str, int]]:
+    ensure_user(user_id, now=now)
+    user = get_user_with_default(user_id, now=now) or ensure_user(user_id, now=now)
+    summary: dict[str, int] = {}
+    if product.sku in ARISA_CREDIT_PACKS:
+        credits = ARISA_CREDIT_PACKS[product.sku]
+        bonus = 0
+        if product.sku == "ARISA_CREDIT_100" and not has_payment_event(
+            user_id=user_id,
+            event_type="first_100_bonus_granted",
+            sku_prefix="ARISA_CREDIT_100",
+        ):
+            bonus = ARISA_FIRST_100_BONUS
+            _safe_log_payment_event(
+                user_id=user_id,
+                event_type="first_100_bonus_granted",
+                sku=product.sku,
+                payload=str(bonus),
+            )
+        update_arisa_credits(user_id, delta=credits + bonus, now=now)
+        summary = {"credits": credits, "bonus": bonus}
+    elif product.sku in ARISA_PASS_PRODUCTS:
+        pass_info = ARISA_PASS_PRODUCTS[product.sku]
+        new_until = _extend_arisa_pass(user, days=pass_info["days"], now=now)
+        update_arisa_pass(
+            user_id,
+            pass_until=new_until,
+            daily_limit=pass_info["daily_limit"],
+            now=now,
+        )
+        summary = {
+            "days": pass_info["days"],
+            "daily_limit": pass_info["daily_limit"],
+        }
+    else:
+        raise ValueError(f"Unsupported Arisa SKU: {product.sku}")
+    updated = get_user_with_default(user_id, now=now) or ensure_user(user_id, now=now)
+    return updated, summary
 
 
 @tarot_router.message(Command("help"))
@@ -3218,7 +3521,7 @@ async def process_successful_payment(message: Message):
         return
 
     ensure_user(user_id)
-    payment_record, created = log_payment(
+    _, created = log_payment(
         user_id=user_id,
         sku=product.sku,
         stars=payment.total_amount,
@@ -3949,6 +4252,26 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
     lang = get_user_lang_or_default(user_id)
     total_start = perf_counter()
     openai_latency_ms: float | None = None
+    event_success = False
+    token_usage: int | None = None
+    credits_used = 0
+    credit_sources: dict[str, int] = {}
+    credit_shortfall = 0
+    now = utcnow()
+
+    if user_id is None:
+        await message.answer(t("ja", "USER_INFO_MISSING"))
+        return
+    ensure_user(user_id, now=now)
+    ensure_arisa_trial(user_id, now=now)
+    user = get_user_with_default(user_id, now=now) or ensure_user(user_id, now=now)
+    if _arisa_available_credits(user, now=now) <= 0:
+        await message.answer(
+            t(lang, "ARISA_OUT_OF_CREDITS"),
+            reply_markup=build_store_keyboard(lang=lang),
+        )
+        return
+    paid_user = is_arisa_paid_user(user_id, user=user, now=now)
 
     logger.info(
         "Handling Arisa message",
@@ -3965,12 +4288,10 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
 
     try:
         openai_start = perf_counter()
-        try:
-            answer, fatal = await call_openai_with_retry(
-                build_arisa_messages(user_query, lang=lang), lang=lang
-            )
-        except TypeError:
-            answer, fatal = await call_openai_with_retry(build_arisa_messages(user_query), lang=lang)
+        answer, fatal, token_usage = await call_openai_with_retry_and_usage(
+            build_arisa_messages(user_query, lang=lang, paid=paid_user),
+            lang=lang,
+        )
         openai_latency_ms = (perf_counter() - openai_start) * 1000
         if fatal:
             await message.answer(
@@ -3978,7 +4299,15 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
                 reply_markup=build_arisa_menu(user_id),
             )
             return
+        credits_used = _arisa_credits_used(token_usage)
+        credit_sources, credit_shortfall = _consume_arisa_credits(
+            user_id,
+            user,
+            credits_used=credits_used,
+            now=now,
+        )
         await message.answer(answer, reply_markup=build_arisa_menu(user_id))
+        event_success = True
     except Exception:
         logger.exception("Unexpected error during Arisa chat")
         await message.answer(
@@ -3997,6 +4326,20 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
                 "total_handler_ms": round(total_ms, 2),
             },
         )
+        if event_success:
+            _safe_log_app_event(
+                event_type="arisa_usage",
+                user_id=user_id,
+                payload=json.dumps(
+                    {
+                        "mode": "arisa",
+                        "total_tokens": token_usage,
+                        "credits_used": credits_used,
+                        "sources": credit_sources,
+                        "shortfall": credit_shortfall,
+                    }
+                ),
+            )
         release_inflight()
 
 
@@ -4004,6 +4347,9 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
 async def arisa_start(message: Message) -> None:
     user_id = message.from_user.id if message.from_user else None
     mark_user_active(user_id)
+    if user_id is not None:
+        ensure_user(user_id)
+        ensure_arisa_trial(user_id)
     lang, is_persisted = resolve_user_lang(message)
     start_text = get_arisa_start_text(lang=lang)
     if not is_persisted:
@@ -4089,6 +4435,210 @@ async def arisa_handle_lang_set(query: CallbackQuery) -> None:
         await bot.send_message(user_id, start_text, reply_markup=reply_markup)
 
 
+@arisa_router.callback_query(F.data == "nav:status")
+async def arisa_handle_nav_status(query: CallbackQuery, state: FSMContext) -> None:
+    await _safe_answer_callback(query, cache_time=1)
+    user_id = query.from_user.id if query.from_user else None
+    if user_id is None:
+        return
+    now = utcnow()
+    ensure_arisa_trial(user_id, now=now)
+    set_user_mode(user_id, "status")
+    mark_user_active(user_id, now=now)
+    await state.clear()
+    user = get_user_with_default(user_id, now=now) or ensure_user(user_id, now=now)
+    formatted = format_arisa_status(user, now=now, lang=get_user_lang_or_default(user_id))
+    if query.message:
+        await query.message.answer(formatted, reply_markup=build_arisa_menu(user_id))
+
+
+@arisa_router.callback_query(F.data == "nav:charge")
+async def arisa_handle_nav_charge(query: CallbackQuery, state: FSMContext) -> None:
+    await _safe_answer_callback(query, cache_time=1)
+    user_id = query.from_user.id if query.from_user else None
+    if user_id is None:
+        return
+    set_user_mode(user_id, "charge")
+    mark_user_active(user_id)
+    await state.clear()
+    if query.message:
+        lang = get_user_lang_or_default(user_id)
+        await query.message.answer(
+            t(lang, "CHARGE_MODE_PROMPT"), reply_markup=build_arisa_menu(user_id)
+        )
+        await send_store_menu(query.message)
+
+
+@arisa_router.callback_query(F.data.startswith("buy:"))
+async def arisa_handle_buy(query: CallbackQuery) -> None:
+    await _safe_answer_callback(query, cache_time=1)
+    data = query.data or ""
+    _, _, sku = data.partition(":")
+    product = get_product(sku) if sku else None
+    user_id = query.from_user.id if query.from_user else None
+    lang = get_user_lang_or_default(user_id)
+    if not product or not _is_arisa_product(product) or user_id is None:
+        _safe_log_payment_event(
+            user_id=user_id,
+            event_type="buy_invalid_product",
+            sku=sku if sku else None,
+            payload=data,
+        )
+        await _safe_answer_callback(query, t(lang, "PRODUCT_INFO_MISSING"), show_alert=True)
+        return
+
+    if _check_purchase_dedup(user_id, product.sku):
+        _safe_log_payment_event(
+            user_id=user_id, event_type="buy_dedup_hit", sku=product.sku, payload=query.data
+        )
+        await _safe_answer_callback(
+            query,
+            t(lang, "PURCHASE_DEDUP_ALERT"),
+            show_alert=True,
+        )
+        if query.message:
+            await query.message.answer(
+                t(lang, "PURCHASE_DEDUP_MESSAGE"),
+                reply_markup=build_arisa_menu(user_id),
+            )
+        return
+
+    payload = json.dumps({"sku": product.sku, "user_id": user_id})
+    title_localized = _get_product_title(product, lang)
+    description_localized = _get_product_description(product, lang)
+    prices = [LabeledPrice(label=title_localized, amount=product.price_stars)]
+
+    if query.message:
+        try:
+            await query.message.answer_invoice(
+                title=title_localized,
+                description=description_localized,
+                payload=payload,
+                provider_token="",
+                currency="XTR",
+                prices=prices,
+            )
+        except TelegramBadRequest as exc:
+            if _is_stale_query_error(exc):
+                await _handle_stale_interaction(
+                    query, user_id=user_id, sku=product.sku, payload=query.data
+                )
+                return
+            logger.exception(
+                "Failed to send invoice",
+                extra={"user_id": user_id, "sku": product.sku, "error": str(exc)},
+            )
+            await query.message.answer(
+                t(lang, "INVOICE_DISPLAY_FAILED"),
+                reply_markup=_build_charge_retry_keyboard(lang),
+            )
+            return
+    await _safe_answer_callback(query, t(lang, "OPENING_PAYMENT_SCREEN"))
+
+
+@arisa_router.pre_checkout_query()
+async def arisa_process_pre_checkout(pre_checkout_query: PreCheckoutQuery):
+    sku, payload_user_id = _parse_invoice_payload(pre_checkout_query.invoice_payload or "")
+    product = get_product(sku) if sku else None
+    user_id = pre_checkout_query.from_user.id if pre_checkout_query.from_user else None
+    log_user_id = user_id or payload_user_id
+    lang = get_user_lang_or_default(log_user_id)
+    if not product or not _is_arisa_product(product):
+        _safe_log_payment_event(
+            user_id=log_user_id,
+            event_type="pre_checkout_invalid_product",
+            sku=sku if sku else None,
+            payload=pre_checkout_query.invoice_payload,
+        )
+        logger.warning(
+            "Pre-checkout received without product",
+            extra={"payload": pre_checkout_query.invoice_payload},
+        )
+        await _safe_answer_pre_checkout(
+            pre_checkout_query,
+            ok=False,
+            error_message=t(lang, "PRODUCT_INFO_MISSING"),
+        )
+        return
+    if payload_user_id is None or user_id is None or payload_user_id != user_id:
+        _safe_log_payment_event(
+            user_id=log_user_id,
+            event_type="pre_checkout_rejected",
+            sku=product.sku,
+            payload=pre_checkout_query.invoice_payload,
+        )
+        await _safe_answer_pre_checkout(
+            pre_checkout_query,
+            ok=False,
+            error_message=t(lang, "PURCHASER_INFO_MISSING"),
+        )
+        return
+
+    ensure_user(user_id)
+    _safe_log_payment_event(
+        user_id=user_id,
+        event_type="pre_checkout",
+        sku=product.sku,
+        payload=pre_checkout_query.invoice_payload,
+    )
+    await _safe_answer_pre_checkout(pre_checkout_query, ok=True)
+
+
+@arisa_router.message(F.successful_payment)
+async def arisa_process_successful_payment(message: Message):
+    payment = message.successful_payment
+    sku, payload_user_id = _parse_invoice_payload(payment.invoice_payload or "")
+    product = get_product(sku) if sku else None
+    user_id_message = message.from_user.id if message.from_user else None
+    user_id = payload_user_id if payload_user_id is not None else user_id_message
+    lang = get_user_lang_or_default(user_id)
+    lang_code = normalize_lang(lang)
+    if user_id_message is not None and user_id is not None and user_id != user_id_message:
+        await message.answer(
+            t(lang_code, "PAYMENT_INFO_MISMATCH")
+        )
+        return
+
+    if not product or not _is_arisa_product(product) or user_id is None:
+        await message.answer(
+            t(lang_code, "PAYMENT_VERIFICATION_DELAY")
+        )
+        return
+
+    ensure_user(user_id)
+    _, created = log_payment(
+        user_id=user_id,
+        sku=product.sku,
+        stars=payment.total_amount,
+        telegram_payment_charge_id=payment.telegram_payment_charge_id,
+        provider_payment_charge_id=payment.provider_payment_charge_id,
+    )
+    _safe_log_payment_event(
+        user_id=user_id,
+        event_type="successful_payment" if created else "successful_payment_duplicate",
+        sku=product.sku,
+        payload=payment.telegram_payment_charge_id,
+    )
+    if not created:
+        await message.answer(
+            t(lang_code, "PAYMENT_ALREADY_PROCESSED"),
+            reply_markup=build_arisa_purchase_followup_keyboard(lang=lang_code),
+        )
+        return
+    now = utcnow()
+    _grant_arisa_product(user_id, product, now=now)
+    title_localized = _get_product_title(product, lang_code)
+    thank_you_lines = [
+        t(lang_code, "PURCHASE_THANK_YOU", product=title_localized),
+        t(lang_code, "PURCHASE_STATUS_REMINDER"),
+        t(lang_code, "ARISA_PURCHASE_NAVIGATION_HINT"),
+    ]
+    await message.answer(
+        "\n".join(thank_you_lines),
+        reply_markup=build_arisa_purchase_followup_keyboard(lang=lang_code),
+    )
+
+
 @arisa_router.message(Command(commands=sorted(ARISA_BLOCKED_COMMANDS)))
 async def arisa_blocked_command(message: Message) -> None:
     user_id = message.from_user.id if message.from_user else None
@@ -4109,6 +4659,7 @@ async def arisa_text(message: Message) -> None:
     lang = get_user_lang_or_default(user_id)
     text = message.text or ""
     action = _resolve_arisa_menu_action(text, lang)
+    now = utcnow()
 
     if action == "love":
         await message.answer(
@@ -4117,6 +4668,17 @@ async def arisa_text(message: Message) -> None:
         )
         return
     if action == "sexy":
+        if user_id is None or not is_arisa_paid_user(user_id, now=now):
+            await message.answer(
+                "\n".join(
+                    [
+                        t(lang, "ARISA_SEXY_LOCKED_TEASER"),
+                        t(lang, "ARISA_SEXY_LOCKED_CTA"),
+                    ]
+                ),
+                reply_markup=build_store_keyboard(lang=lang),
+            )
+            return
         await message.answer(
             get_arisa_prompt("ARISA_SEXY_PROMPTS", "ARISA_SEXY_PROMPT", lang=lang),
             reply_markup=build_arisa_menu(user_id),
@@ -4126,7 +4688,6 @@ async def arisa_text(message: Message) -> None:
         await prompt_arisa_charge_menu(message)
         return
     if action == "status":
-        now = utcnow()
         await prompt_arisa_status(message, now=now)
         return
     if action == "language":
@@ -4305,6 +4866,8 @@ async def main() -> None:
             "admin_ids_count": len(ADMIN_USER_IDS),
             "paywall_enabled": PAYWALL_ENABLED,
             "polling": True,
+            "character": CHARACTER or None,
+            "dotenv_file": str(dotenv_path),
         },
     )
     if BOT_MODE == "arisa":

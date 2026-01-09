@@ -37,6 +37,10 @@ SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "hasegawaarisa1@gmail.com")
 ADMIN_USER_IDS = _parse_admin_ids(os.getenv("ADMIN_USER_IDS", ""))
 THROTTLE_MESSAGE_INTERVAL_SEC = _parse_float_env("THROTTLE_MESSAGE_INTERVAL_SEC", 1.2)
 THROTTLE_CALLBACK_INTERVAL_SEC = _parse_float_env("THROTTLE_CALLBACK_INTERVAL_SEC", 0.8)
+ONE_MESSAGE_TOKENS = int(os.getenv("ONE_MESSAGE_TOKENS", "600"))
+TRIAL_FREE_CREDITS = int(os.getenv("TRIAL_FREE_CREDITS", "10"))
+PASS_7D_DAILY_LIMIT = int(os.getenv("PASS_7D_DAILY_LIMIT", "30"))
+PASS_30D_DAILY_LIMIT = int(os.getenv("PASS_30D_DAILY_LIMIT", "50"))
 
 if not TELEGRAM_BOT_TOKEN:
     raise RuntimeError("TELEGRAM_BOT_TOKEN is not set in environment or .env")

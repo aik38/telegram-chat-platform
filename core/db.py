@@ -30,6 +30,12 @@ class UserRecord:
     tickets_3: int
     tickets_7: int
     tickets_10: int
+    arisa_credits: int
+    arisa_trial_remaining: int
+    arisa_pass_until: datetime | None
+    arisa_pass_daily_limit: int | None
+    arisa_pass_used_today: int
+    arisa_pass_usage_date: date | None
     images_enabled: bool
     terms_accepted_at: datetime | None
     general_chat_count_today: int
@@ -129,6 +135,12 @@ def init_db() -> None:
                 created_at TEXT,
                 premium_until TEXT,
                 pass_until TEXT,
+                arisa_pass_until TEXT,
+                arisa_pass_daily_limit INT,
+                arisa_pass_used_today INT,
+                arisa_pass_usage_date TEXT,
+                arisa_credits INT,
+                arisa_trial_remaining INT,
                 first_seen TEXT,
                 usage_date TEXT,
                 general_chat_count_today INT,
@@ -212,6 +224,22 @@ def init_db() -> None:
             conn.execute("ALTER TABLE users ADD COLUMN terms_accepted_at TEXT")
         if not _column_exists(conn, "users", "pass_until"):
             conn.execute("ALTER TABLE users ADD COLUMN pass_until TEXT")
+        if not _column_exists(conn, "users", "arisa_pass_until"):
+            conn.execute("ALTER TABLE users ADD COLUMN arisa_pass_until TEXT")
+        if not _column_exists(conn, "users", "arisa_pass_daily_limit"):
+            conn.execute("ALTER TABLE users ADD COLUMN arisa_pass_daily_limit INT")
+        if not _column_exists(conn, "users", "arisa_pass_used_today"):
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN arisa_pass_used_today INT DEFAULT 0"
+            )
+        if not _column_exists(conn, "users", "arisa_pass_usage_date"):
+            conn.execute("ALTER TABLE users ADD COLUMN arisa_pass_usage_date TEXT")
+        if not _column_exists(conn, "users", "arisa_credits"):
+            conn.execute("ALTER TABLE users ADD COLUMN arisa_credits INT DEFAULT 0")
+        if not _column_exists(conn, "users", "arisa_trial_remaining"):
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN arisa_trial_remaining INT DEFAULT 0"
+            )
         if not _column_exists(conn, "users", "first_seen"):
             conn.execute("ALTER TABLE users ADD COLUMN first_seen TEXT")
         if not _column_exists(conn, "users", "usage_date"):
@@ -294,6 +322,12 @@ def ensure_user(user_id: int, *, now: datetime | None = None) -> UserRecord:
                 created_at,
                 premium_until,
                 pass_until,
+                arisa_pass_until,
+                arisa_pass_daily_limit,
+                arisa_pass_used_today,
+                arisa_pass_usage_date,
+                arisa_credits,
+                arisa_trial_remaining,
                 first_seen,
                 usage_date,
                 general_chat_count_today,
@@ -306,7 +340,7 @@ def ensure_user(user_id: int, *, now: datetime | None = None) -> UserRecord:
                 last_general_chat_block_notice_at
             , lang
             )
-            VALUES (?, ?, NULL, NULL, ?, ?, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL)
+            VALUES (?, ?, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, ?, ?, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL)
             """,
             (user_id, now.isoformat(), now.isoformat(), usage_today.isoformat()),
         )
@@ -319,6 +353,12 @@ def ensure_user(user_id: int, *, now: datetime | None = None) -> UserRecord:
             tickets_3=0,
             tickets_7=0,
             tickets_10=0,
+            arisa_credits=0,
+            arisa_trial_remaining=0,
+            arisa_pass_until=None,
+            arisa_pass_daily_limit=None,
+            arisa_pass_used_today=0,
+            arisa_pass_usage_date=None,
             images_enabled=False,
             terms_accepted_at=None,
             general_chat_count_today=0,
@@ -537,6 +577,12 @@ def check_db_health() -> tuple[bool, list[str]]:
                     "created_at",
                     "premium_until",
                     "pass_until",
+                    "arisa_pass_until",
+                    "arisa_pass_daily_limit",
+                    "arisa_pass_used_today",
+                    "arisa_pass_usage_date",
+                    "arisa_credits",
+                    "arisa_trial_remaining",
                     "first_seen",
                     "usage_date",
                     "general_chat_count_today",
@@ -618,8 +664,12 @@ def check_db_health() -> tuple[bool, list[str]]:
 def _row_to_user(row: sqlite3.Row) -> UserRecord:
     premium_until = row["premium_until"]
     pass_until = row["pass_until"]
+    arisa_pass_until = row["arisa_pass_until"]
     premium_dt = datetime.fromisoformat(premium_until) if premium_until else None
     pass_dt = datetime.fromisoformat(pass_until) if pass_until else None
+    arisa_pass_dt = (
+        datetime.fromisoformat(arisa_pass_until) if arisa_pass_until else None
+    )
     terms_accepted_raw = row["terms_accepted_at"]
     terms_accepted_dt = (
         datetime.fromisoformat(terms_accepted_raw) if terms_accepted_raw else None
@@ -631,6 +681,10 @@ def _row_to_user(row: sqlite3.Row) -> UserRecord:
     last_notice_raw = row["last_general_chat_block_notice_at"]
     last_notice_dt = datetime.fromisoformat(last_notice_raw) if last_notice_raw else None
     lang_raw = row["lang"]
+    arisa_pass_usage_raw = row["arisa_pass_usage_date"]
+    arisa_pass_usage_date = (
+        date.fromisoformat(arisa_pass_usage_raw) if arisa_pass_usage_raw else None
+    )
     return UserRecord(
         user_id=row["user_id"],
         created_at=datetime.fromisoformat(row["created_at"]),
@@ -640,6 +694,12 @@ def _row_to_user(row: sqlite3.Row) -> UserRecord:
         tickets_3=row["tickets_3"],
         tickets_7=row["tickets_7"],
         tickets_10=row["tickets_10"],
+        arisa_credits=row["arisa_credits"],
+        arisa_trial_remaining=row["arisa_trial_remaining"],
+        arisa_pass_until=arisa_pass_dt,
+        arisa_pass_daily_limit=row["arisa_pass_daily_limit"],
+        arisa_pass_used_today=row["arisa_pass_used_today"],
+        arisa_pass_usage_date=arisa_pass_usage_date,
         images_enabled=bool(row["images_enabled"]),
         terms_accepted_at=terms_accepted_dt,
         general_chat_count_today=row["general_chat_count_today"],
@@ -904,10 +964,14 @@ def _refresh_daily_counts(
     conn.execute(
         """
         UPDATE users
-        SET usage_date = ?, general_chat_count_today = 0, one_oracle_count_today = 0
+        SET usage_date = ?,
+            general_chat_count_today = 0,
+            one_oracle_count_today = 0,
+            arisa_pass_used_today = 0,
+            arisa_pass_usage_date = ?
         WHERE user_id = ?
         """,
-        (today.isoformat(), row["user_id"]),
+        (today.isoformat(), today.isoformat(), row["user_id"]),
     )
     refreshed = conn.execute(
         "SELECT * FROM users WHERE user_id = ?", (row["user_id"],)
@@ -972,6 +1036,132 @@ def log_app_event(
     if row is None:
         raise ValueError("Failed to insert app event")
     return _row_to_app_event(row)
+
+
+def has_app_event(*, user_id: int, event_type: str) -> bool:
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT 1 FROM app_events
+            WHERE user_id = ? AND event_type = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (user_id, event_type),
+        ).fetchone()
+    return row is not None
+
+
+def has_payment_event(
+    *, user_id: int, event_type: str, sku_prefix: str | None = None
+) -> bool:
+    query = """
+        SELECT 1 FROM payment_events
+        WHERE user_id = ? AND event_type = ?
+    """
+    params: list[object] = [user_id, event_type]
+    if sku_prefix:
+        query += " AND sku LIKE ?"
+        params.append(f"{sku_prefix}%")
+    query += " ORDER BY id DESC LIMIT 1"
+    with _connect() as conn:
+        row = conn.execute(query, params).fetchone()
+    return row is not None
+
+
+def update_arisa_credits(
+    user_id: int, *, delta: int, now: datetime | None = None
+) -> UserRecord:
+    now = now or datetime.now(timezone.utc)
+    ensure_user(user_id, now=now)
+    with _connect() as conn:
+        conn.execute(
+            """
+            UPDATE users
+            SET arisa_credits = CASE
+                WHEN arisa_credits + ? < 0 THEN 0
+                ELSE arisa_credits + ?
+            END
+            WHERE user_id = ?
+            """,
+            (delta, delta, user_id),
+        )
+    return get_user(user_id, now=now)  # type: ignore[return-value]
+
+
+def set_arisa_trial_remaining(
+    user_id: int, *, remaining: int, now: datetime | None = None
+) -> UserRecord:
+    now = now or datetime.now(timezone.utc)
+    ensure_user(user_id, now=now)
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE users SET arisa_trial_remaining = ? WHERE user_id = ?",
+            (max(remaining, 0), user_id),
+        )
+    return get_user(user_id, now=now)  # type: ignore[return-value]
+
+
+def update_arisa_pass(
+    user_id: int,
+    *,
+    pass_until: datetime | None,
+    daily_limit: int | None,
+    now: datetime | None = None,
+) -> UserRecord:
+    now = now or datetime.now(timezone.utc)
+    ensure_user(user_id, now=now)
+    usage_today = _usage_date(now).isoformat()
+    with _connect() as conn:
+        conn.execute(
+            """
+            UPDATE users
+            SET arisa_pass_until = ?,
+                arisa_pass_daily_limit = ?,
+                arisa_pass_used_today = 0,
+                arisa_pass_usage_date = ?
+            WHERE user_id = ?
+            """,
+            (
+                pass_until.isoformat() if pass_until else None,
+                daily_limit,
+                usage_today,
+                user_id,
+            ),
+        )
+    return get_user(user_id, now=now)  # type: ignore[return-value]
+
+
+def increment_arisa_pass_usage(
+    user_id: int, *, amount: int, now: datetime | None = None
+) -> UserRecord:
+    now = now or datetime.now(timezone.utc)
+    ensure_user(user_id, now=now)
+    usage_today = _usage_date(now)
+    with _connect() as conn:
+        row = conn.execute(
+            """
+            SELECT arisa_pass_used_today, arisa_pass_usage_date
+            FROM users WHERE user_id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError("User must exist to update pass usage")
+        usage_raw = row["arisa_pass_usage_date"]
+        usage_date_val = date.fromisoformat(usage_raw) if usage_raw else None
+        used_today = 0 if usage_date_val != usage_today else row["arisa_pass_used_today"]
+        new_used = max(used_today + amount, 0)
+        conn.execute(
+            """
+            UPDATE users
+            SET arisa_pass_used_today = ?,
+                arisa_pass_usage_date = ?
+            WHERE user_id = ?
+            """,
+            (new_used, usage_today.isoformat(), user_id),
+        )
+    return get_user(user_id, now=now)  # type: ignore[return-value]
 
 
 def get_daily_stats(*, days: int = 7, now: datetime | None = None) -> list[dict[str, object]]:
@@ -1073,6 +1263,12 @@ def _backfill_user_columns(conn: sqlite3.Connection) -> None:
             general_chat_count_today = COALESCE(general_chat_count_today, 0),
             one_oracle_count_today = COALESCE(one_oracle_count_today, 0),
             pass_until = COALESCE(pass_until, premium_until),
+            arisa_credits = COALESCE(arisa_credits, 0),
+            arisa_trial_remaining = COALESCE(arisa_trial_remaining, 0),
+            arisa_pass_until = COALESCE(arisa_pass_until, NULL),
+            arisa_pass_daily_limit = COALESCE(arisa_pass_daily_limit, NULL),
+            arisa_pass_used_today = COALESCE(arisa_pass_used_today, 0),
+            arisa_pass_usage_date = COALESCE(arisa_pass_usage_date, NULL),
             last_general_chat_block_notice_at = COALESCE(last_general_chat_block_notice_at, NULL),
             lang = CASE
                 WHEN lang IS NULL THEN NULL
@@ -1107,8 +1303,11 @@ __all__ = [
     "get_latest_payment",
     "get_payment_by_charge_id",
     "grant_purchase",
+    "has_app_event",
     "has_active_pass",
     "has_accepted_terms",
+    "has_payment_event",
+    "increment_arisa_pass_usage",
     "increment_general_chat_count",
     "increment_one_oracle_count",
     "init_db",
@@ -1119,7 +1318,10 @@ __all__ = [
     "log_audit",
     "mark_payment_refunded",
     "revoke_purchase",
+    "set_arisa_trial_remaining",
     "set_user_lang",
     "set_last_general_chat_block_notice",
     "set_terms_accepted",
+    "update_arisa_credits",
+    "update_arisa_pass",
 ]
