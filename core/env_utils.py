@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from urllib.parse import urlparse
-
 from dotenv import load_dotenv
 
 _GEMINI_HOST = "generativelanguage.googleapis.com"
@@ -45,10 +43,10 @@ def load_environment() -> Path:
 def infer_provider(base_url: str | None) -> str:
     if not base_url:
         return "openai"
-    host = (urlparse(base_url).hostname or "").lower()
-    if _GEMINI_HOST in host or "googleapis" in host:
+    base_url_lower = base_url.lower()
+    if _GEMINI_HOST in base_url_lower:
         return "gemini"
-    if _OPENAI_HOST in host:
+    if _OPENAI_HOST in base_url_lower:
         return "openai"
     return "custom"
 
@@ -56,13 +54,13 @@ def infer_provider(base_url: str | None) -> str:
 def validate_model_base_url(base_url: str | None, model: str, label: str) -> None:
     if not base_url:
         return
-    base_url_lower = base_url.lower()
+    provider = infer_provider(base_url)
     model_lower = model.strip().lower()
-    if _GEMINI_HOST in base_url_lower and model_lower.startswith(("gpt-", "o1-")):
+    if provider == "gemini" and model_lower.startswith("gpt-"):
         raise RuntimeError(
             f"{label} mismatch: OPENAI_BASE_URL points to Gemini but model '{model}' looks like OpenAI."
         )
-    if _OPENAI_HOST in base_url_lower and model_lower.startswith("gemini-"):
+    if provider == "openai" and model_lower.startswith("gemini-"):
         raise RuntimeError(
             f"{label} mismatch: OPENAI_BASE_URL points to OpenAI but model '{model}' looks like Gemini."
         )
