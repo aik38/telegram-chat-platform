@@ -1,2 +1,3 @@
 @echo off
-pwsh -NoExit -ExecutionPolicy Bypass -File "%~dp0tools\start_line.ps1"
+cd /d "%~dp0"
+pwsh -NoExit -ExecutionPolicy Bypass -File "tools\start_line.ps1"
