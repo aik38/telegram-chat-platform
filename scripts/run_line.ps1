@@ -27,6 +27,14 @@ if (-not [int]::TryParse($Port, [ref]$ParsedPort)) {
     throw "Invalid LINE_PORT/API_PORT value: $Port"
 }
 $Port = $ParsedPort
+$env:LINE_PORT = $Port
+
+$DoctorPath = Join-Path $RepoRoot "scripts\\doctor.ps1"
+& powershell -NoProfile -ExecutionPolicy Bypass -File $DoctorPath
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Doctor checks failed. Fix the issues above and retry."
+    exit $LASTEXITCODE
+}
 
 function Test-PortInUse {
     param(

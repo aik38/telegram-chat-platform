@@ -1,6 +1,14 @@
 $ErrorActionPreference="Stop"
 $repo = Split-Path -Parent $PSScriptRoot   # tools -> repo
 Set-Location $repo
+$env:LINE_PORT = "8000"
+
+$DoctorPath = Join-Path $repo "scripts\\doctor.ps1"
+& powershell -NoProfile -ExecutionPolicy Bypass -File $DoctorPath
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "Doctor checks failed. Fix the issues above and retry."
+  exit $LASTEXITCODE
+}
 
 if(Test-Path ".\.venv\Scripts\Activate.ps1"){ . .\.venv\Scripts\Activate.ps1 }
 

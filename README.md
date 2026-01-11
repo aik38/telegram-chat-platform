@@ -29,6 +29,40 @@ pip install -r requirements.txt
 - LINE は同時に 1 つだけ起動してください（`8000`/`8001` のどちらか片方）。
 - ショートカットは `tools/make_shortcuts.ps1` で再生成してください。Desktop の「旧」フォルダに残っている旧ショートカットは誤起動の原因になるため使用しないでください。
 
+## Troubleshooting（Windows）
+
+### WinError 10048（ポート衝突）
+
+- `uvicorn` 起動時に `WinError 10048` が出る場合、`8000` または `8001` が既に使用中です。
+- `start_line_*.cmd` や `scripts/run_line.ps1` は起動前に `scripts/doctor.ps1` を実行して、使用中の PID / プロセス / コマンドラインを表示します。
+- 既に使用中であれば、該当プロセスを停止するか `LINE_PORT`（`API_PORT`）を変更してください。
+
+### TelegramConflictError（同一トークンの多重 polling）
+
+- 同じ `TELEGRAM_BOT_TOKEN` で複数プロセスが `getUpdates` を実行すると `TelegramConflictError` が発生します。
+- `scripts/doctor.ps1` はリポジトリ配下の python/ngrok プロセスを調べ、`.env` から `TELEGRAM_BOT_TOKEN` を読み取り、重複していれば PID を警告します。
+
+### Doctor の使い方
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/doctor.ps1
+```
+
+**出力例（マスク済みトークン）**
+
+```text
+Doctor: repo root C:\work\telegram-chat-platform
+
+Listening ports (8000, 8001, 4040):
+  Port 8000: PID 1234 | python.exe | python -m uvicorn api.main:app --port 8000
+  Port 8001: (no listeners)
+  Port 4040: PID 4567 | ngrok.exe | ngrok http 8000
+
+Repo-linked python/ngrok processes:
+  PID 4321 | python.exe | DOTENV_FILE=C:\work\telegram-chat-platform\.env | TELEGRAM_BOT_TOKEN=1234...abcd
+    C:\Python\python.exe -m bot.main
+```
+
 ## Windows最短起動（Bot）
 
 PowerShell で **1コマンド** で Bot（aiogram）を起動する手順です。API サーバー（Uvicorn）は別コマンドなので、Bot を動かしたい場合は以下のスクリプトを使ってください。
