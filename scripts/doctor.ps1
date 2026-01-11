@@ -28,6 +28,22 @@ function Get-DotenvFileFromCommandLine {
     return $null
 }
 
+function Test-CommandLineForDotenv {
+    param(
+        [string]$CommandLine
+    )
+    if (-not $CommandLine) {
+        return $false
+    }
+    if ($CommandLine -match 'DOTENV_FILE=("[^"]+"|\S+)') {
+        return $true
+    }
+    if ($CommandLine -match '-DotenvFile\s+("[^"]+"|\S+)') {
+        return $true
+    }
+    return $false
+}
+
 function Resolve-DotenvPath {
     param(
         [string]$DotenvFile
@@ -36,9 +52,9 @@ function Resolve-DotenvPath {
         return $null
     }
     if ([System.IO.Path]::IsPathRooted($DotenvFile)) {
-        return $DotenvFile
+        return [System.IO.Path]::GetFullPath($DotenvFile)
     }
-    return (Join-Path $RepoRoot $DotenvFile)
+    return [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $DotenvFile))
 }
 
 function Get-DotenvValue {
@@ -109,7 +125,6 @@ foreach ($port in $ports) {
     }
 }
 
-$repoPattern = [regex]::Escape($RepoRoot.Path)
 $trackedProcesses = @()
 
 $processInfo.Values | ForEach-Object {
@@ -120,14 +135,14 @@ $processInfo.Values | ForEach-Object {
     if ($_.Name -notmatch '(?i)^(python|pythonw|ngrok)(\.exe)?$') {
         return
     }
-    if ($cmdLine -notmatch $repoPattern) {
+    if (-not (Test-CommandLineForDotenv -CommandLine $cmdLine)) {
         return
     }
     $trackedProcesses += $_
 }
 
 Write-Host ""
-Write-Host "Repo-linked python/ngrok processes:"
+Write-Host "Python/ngrok processes with DOTENV_FILE:"
 
 if (-not $trackedProcesses) {
     Write-Host "  (none)"
@@ -175,34 +190,6 @@ if ($duplicateTokens) {
         Write-Warning "  Token $masked is used by PID(s): $pids"
     }
     $exitCode = 1
-}
-
-$intendedPorts = @()
-foreach ($portValue in @($env:LINE_PORT, $env:API_PORT)) {
-    if (-not $portValue) {
-        continue
-    }
-    [int]$parsed = 0
-    if ([int]::TryParse($portValue, [ref]$parsed)) {
-        if ($intendedPorts -notcontains $parsed) {
-            $intendedPorts += $parsed
-        }
-    }
-}
-
-if ($intendedPorts) {
-    $blocked = @()
-    foreach ($port in $intendedPorts) {
-        if (($port -eq 8000 -or $port -eq 8001) -and ($listeners | Where-Object { $_.LocalPort -eq $port })) {
-            $blocked += $port
-        }
-    }
-    if ($blocked) {
-        $blockedList = ($blocked | Sort-Object -Unique) -join ", "
-        Write-Host ""
-        Write-Warning "Port(s) already in use for the intended start: $blockedList"
-        $exitCode = 1
-    }
 }
 
 if ($exitCode -eq 0) {

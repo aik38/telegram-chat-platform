@@ -8,4 +8,4 @@ if errorlevel 1 (
   echo Doctor checks failed. Fix the issues above and retry.
   exit /b 1
 )
-pwsh -NoExit -ExecutionPolicy Bypass -File "tools\start_line.ps1"
+start "" /D "%REPO%" cmd /k "pwsh -NoExit -ExecutionPolicy Bypass -File \"tools\start_line.ps1\""

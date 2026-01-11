@@ -34,19 +34,21 @@ pip install -r requirements.txt
 ### WinError 10048（ポート衝突）
 
 - `uvicorn` 起動時に `WinError 10048` が出る場合、`8000` または `8001` が既に使用中です。
-- `start_line_*.cmd` や `scripts/run_line.ps1` は起動前に `scripts/doctor.ps1` を実行して、使用中の PID / プロセス / コマンドラインを表示します。
+- `scripts/doctor.ps1` は `8000/8001/4040` の待受プロセスを一覧し、PID / プロセス / コマンドラインを表示します（`start_*` からも自動実行されます）。
 - 既に使用中であれば、該当プロセスを停止するか `LINE_PORT`（`API_PORT`）を変更してください。
 
 ### TelegramConflictError（同一トークンの多重 polling）
 
 - 同じ `TELEGRAM_BOT_TOKEN` で複数プロセスが `getUpdates` を実行すると `TelegramConflictError` が発生します。
-- `scripts/doctor.ps1` はリポジトリ配下の python/ngrok プロセスを調べ、`.env` から `TELEGRAM_BOT_TOKEN` を読み取り、重複していれば PID を警告します。
+- `scripts/doctor.ps1` は `DOTENV_FILE=...` / `-DotenvFile ...` を含む python/ngrok プロセスから `.env` を読み取り、`TELEGRAM_BOT_TOKEN` の重複を検知すると exit 1 で停止します（`start_*` は検知時に起動を中断します）。
 
 ### Doctor の使い方
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/doctor.ps1
 ```
+
+> 相対パスの `.env.*` はリポジトリ直下に解決され、トークンはマスクして表示されます。
 
 **出力例（マスク済みトークン）**
 
@@ -58,7 +60,7 @@ Listening ports (8000, 8001, 4040):
   Port 8001: (no listeners)
   Port 4040: PID 4567 | ngrok.exe | ngrok http 8000
 
-Repo-linked python/ngrok processes:
+Python/ngrok processes with DOTENV_FILE:
   PID 4321 | python.exe | DOTENV_FILE=C:\work\telegram-chat-platform\.env | TELEGRAM_BOT_TOKEN=1234...abcd
     C:\Python\python.exe -m bot.main
 ```
