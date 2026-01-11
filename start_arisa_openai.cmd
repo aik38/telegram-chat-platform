@@ -6,5 +6,5 @@ if not exist ".env.arisa.openai" (
   exit /b 1
 )
 set "DOTENV_FILE=.env.arisa.openai"
-powershell -ExecutionPolicy Bypass -File "scripts\run_default.ps1"
+powershell -ExecutionPolicy Bypass -File "scripts\run_arisa.ps1" -DotenvFile ".env.arisa.openai"
 pause

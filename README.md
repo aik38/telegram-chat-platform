@@ -21,6 +21,12 @@ pip install -r requirements.txt
 - 日常運用は PowerShell で `tools/sync.ps1`（ショートカット名: “telegram sync”）を実行する想定です。内部で `git pull --rebase` → `.venv\Scripts\python.exe -m pytest -q` → 変更があれば commit/push の順で回します。
   - Windows 由来の junk（Desktop.ini など）だけが差分の場合は commit をスキップします（PR #47 実装）。
 
+## Windows quick start
+
+- Tarot / Arisa は **Telegram Bot**、LINE は **API サーバー** です（Bot と API は別プロセス）。
+- Gemini / OpenAI の切り替えは `DOTENV_FILE` で行います（例: `.env.gemini` / `.env.openai` / `.env.arisa.gemini` / `.env.arisa.openai`）。`start_*` の cmd はそれぞれ既定の `DOTENV_FILE` を設定済みです。
+- LINE は既定で `8000` を使うため、同時起動する場合は `LINE_PORT`（または `API_PORT`）を変えてください。`start_line_openai.cmd` は既定で `8001` を使うように設定しています。
+
 ## Windows最短起動（Bot）
 
 PowerShell で **1コマンド** で Bot（aiogram）を起動する手順です。API サーバー（Uvicorn）は別コマンドなので、Bot を動かしたい場合は以下のスクリプトを使ってください。
