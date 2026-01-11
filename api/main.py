@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from api.db import apply_migrations
 
 from api.routers import common_backend, line_webhook, stripe, tg_prince
+from core.llm_client import get_openai_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +20,32 @@ load_dotenv(dotenv_path, override=False)
 app = FastAPI()
 
 
+def _get_env_model(name: str, fallback: str) -> str:
+    raw = os.getenv(name)
+    if raw is None:
+        return fallback
+    raw = raw.strip()
+    return raw or fallback
+
+
 def _log_env_status() -> None:
+    openai_model = _get_env_model("OPENAI_MODEL", "gpt-4o-mini")
+    line_openai_model = _get_env_model("LINE_OPENAI_MODEL", openai_model)
+    openai_base_url = get_openai_base_url() or "default"
     logger.info(
         "Environment flags -> OPENAI_API_KEY set: %s, LINE_CHANNEL_ACCESS_TOKEN set: %s, LINE_CHANNEL_SECRET set: %s",
         bool(os.getenv("OPENAI_API_KEY")),
         bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN")),
         bool(os.getenv("LINE_CHANNEL_SECRET")),
+    )
+    logger.info(
+        "OpenAI config",
+        extra={
+            "mode": "startup",
+            "openai_base_url": openai_base_url,
+            "openai_model": openai_model,
+            "line_openai_model": line_openai_model,
+        },
     )
 
 

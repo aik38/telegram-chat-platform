@@ -64,7 +64,7 @@ from core.config import (
     THROTTLE_MESSAGE_INTERVAL_SEC,
     TRIAL_FREE_CREDITS,
 )
-from core.llm_client import make_openai_client
+from core.llm_client import get_openai_base_url, make_openai_client
 from core.db import (
     TicketColumn,
     UserRecord,
@@ -140,6 +140,17 @@ client = make_openai_client(OPENAI_API_KEY)
 logger = logging.getLogger(__name__)
 CHARACTER = os.getenv("CHARACTER", "").strip().lower()
 BOT_MODE = "arisa" if CHARACTER == "arisa" else "default"
+
+
+def _get_env_model(name: str, fallback: str) -> str:
+    raw = os.getenv(name)
+    if raw is None:
+        return fallback
+    raw = raw.strip()
+    return raw or fallback
+
+
+OPENAI_MODEL = _get_env_model("OPENAI_MODEL", "gpt-4o-mini")
 dp.message.middleware(ThrottleMiddleware(min_interval_sec=THROTTLE_MESSAGE_INTERVAL_SEC))
 # Callback queries are lightly throttled to absorb rapid taps without dropping the bot.
 dp.callback_query.middleware(
@@ -1378,7 +1389,7 @@ async def call_openai_with_retry(
             completion = await asyncio.get_running_loop().run_in_executor(
                 None,
                 lambda: client.chat.completions.create(
-                    model="gpt-4o-mini", messages=prepared_messages
+                    model=OPENAI_MODEL, messages=prepared_messages
                 ),
             )
             answer = completion.choices[0].message.content
@@ -1436,7 +1447,7 @@ async def call_openai_with_retry_and_usage(
             completion = await asyncio.get_running_loop().run_in_executor(
                 None,
                 lambda: client.chat.completions.create(
-                    model="gpt-4o-mini", messages=prepared_messages
+                    model=OPENAI_MODEL, messages=prepared_messages
                 ),
             )
             answer = completion.choices[0].message.content
@@ -4899,6 +4910,11 @@ async def main() -> None:
     if not db_ok:
         logger.error("DB health check failed; exiting for safety.")
         raise SystemExit(1)
+    openai_base_url = get_openai_base_url() or "default"
+    logger.info(
+        "OpenAI config",
+        extra={"mode": "startup", "openai_base_url": openai_base_url, "openai_model": OPENAI_MODEL},
+    )
     logger.info(
         "Starting akolasia_tarot_bot",
         extra={

@@ -12,6 +12,10 @@ def _get_openai_base_url() -> Optional[str]:
     return base_url or None
 
 
+def get_openai_base_url() -> Optional[str]:
+    return _get_openai_base_url()
+
+
 def make_openai_client(api_key: str | None) -> OpenAI | None:
     if not api_key:
         return None
