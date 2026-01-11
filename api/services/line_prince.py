@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 from typing import Iterable
+from urllib.parse import urlparse
 
 from openai import (
     APIConnectionError,
@@ -15,7 +16,7 @@ from openai import (
     RateLimitError,
 )
 
-from core.llm_client import make_openai_client
+from core.llm_client import get_openai_base_url, make_openai_client
 
 DEFAULT_SYSTEM_PROMPT = """あなたは「星の王子さま」の価値観を大切にする語り手です。
 - 原作の長文引用や台詞の丸写しは避け、エッセンスや心の動きを短く伝えてください。
@@ -33,12 +34,40 @@ def _get_env_model(name: str, fallback: str) -> str:
     return raw or fallback
 
 
-OPENAI_MODEL = _get_env_model("OPENAI_MODEL", "gpt-4o-mini")
-LINE_OPENAI_MODEL = _get_env_model("LINE_OPENAI_MODEL", OPENAI_MODEL)
-
-
 def _get_system_prompt() -> str:
     return os.getenv("PRINCE_SYSTEM_PROMPT", DEFAULT_SYSTEM_PROMPT)
+
+
+def _get_openai_model() -> str:
+    return _get_env_model("OPENAI_MODEL", "gpt-4o-mini")
+
+
+def _get_line_openai_model() -> str:
+    return _get_env_model("LINE_OPENAI_MODEL", _get_openai_model())
+
+
+def _get_base_url_host() -> str:
+    base_url = get_openai_base_url()
+    parsed = urlparse(base_url or "https://api.openai.com")
+    return parsed.hostname or "unknown"
+
+
+def _infer_provider(base_url_host: str) -> str:
+    host = base_url_host.lower()
+    if "googleapis" in host:
+        return "gemini"
+    if "openai.com" in host:
+        return "openai"
+    return "custom"
+
+
+def get_line_prince_config() -> dict[str, str]:
+    base_url_host = _get_base_url_host()
+    return {
+        "base_url_host": base_url_host,
+        "model": _get_line_openai_model(),
+        "provider": _infer_provider(base_url_host),
+    }
 
 
 class PrinceChatService:
@@ -46,6 +75,7 @@ class PrinceChatService:
         api_key = os.getenv("OPENAI_API_KEY")
         self.client = client or make_openai_client(api_key)
         self.system_prompt = _get_system_prompt()
+        self.model = _get_line_openai_model()
 
     async def generate_reply(self, user_message: str) -> str:
         messages: Iterable[dict[str, str]] = (
@@ -66,7 +96,7 @@ class PrinceChatService:
                 completion = await asyncio.get_running_loop().run_in_executor(
                     None,
                     lambda: self.client.chat.completions.create(
-                        model=LINE_OPENAI_MODEL,
+                        model=self.model,
                         messages=list(messages),
                         temperature=0.8,
                     ),
