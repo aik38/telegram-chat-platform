@@ -1,11 +1,12 @@
 @echo off
-cd /d "%~dp0"
-set "DOTENV_FILE=.env.gemini"
 set "REPO=%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%REPO%scripts\doctor.ps1"
+pushd "%REPO%"
+set "DOTENV_FILE=.env.gemini"
+where pwsh >nul 2>nul && (set "PS=pwsh") || (set "PS=powershell")
+%PS% -NoProfile -ExecutionPolicy Bypass -File "%REPO%scripts\doctor.ps1"
 if errorlevel 1 (
-  echo Doctor checks failed. Fix the issues above and retry.
+  echo Doctor failed. Fix issues above.
   pause
   exit /b 1
 )
-start "" /D "%REPO%" cmd /k "powershell -NoProfile -ExecutionPolicy Bypass -File \"scripts\run_default.ps1\""
+start "" /D "%REPO%" %PS% -NoExit -NoProfile -ExecutionPolicy Bypass -File "%REPO%scripts\run_default.ps1" -DotenvFile "%REPO%.env.gemini"
