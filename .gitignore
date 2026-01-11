@@ -22,6 +22,10 @@ dist/
 # Logs
 *.log
 diag_*.txt
+shortcut_*.txt
+shortcuts_*.txt
+shortcut_dump*.txt
+shortcuts_dump*.txt
 
 # SQLite (local runtime)
 db/*.db
@@ -41,6 +45,7 @@ Thumbs.db
 thumbs.db
 Desktop.ini
 desktop.ini
+*.lnk
 **/Thumbs.db
 **/thumbs.db
 **/Desktop.ini

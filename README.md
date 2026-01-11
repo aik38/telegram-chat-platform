@@ -27,6 +27,7 @@ pip install -r requirements.txt
 - Gemini / OpenAI の切り替えは `DOTENV_FILE` で行います（例: `.env.gemini` / `.env.openai` / `.env.arisa.gemini` / `.env.arisa.openai`）。`start_*` の cmd はそれぞれ既定の `DOTENV_FILE` を設定済みです。
 - LINE は既定で `8000` を使うため、同時起動する場合は `LINE_PORT`（または `API_PORT`）を変えてください。`start_line_openai.cmd` は既定で `8001` を使うように設定しています。
 - LINE は同時に 1 つだけ起動してください（`8000`/`8001` のどちらか片方）。
+- ショートカットは `tools/make_shortcuts.ps1` で再生成してください。Desktop の「旧」フォルダに残っている旧ショートカットは誤起動の原因になるため使用しないでください。
 
 ## Windows最短起動（Bot）
 
