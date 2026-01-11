@@ -16,6 +16,7 @@ from openai import (
     RateLimitError,
 )
 
+from core.env_utils import infer_provider
 from core.llm_client import get_openai_base_url, make_openai_client
 
 DEFAULT_SYSTEM_PROMPT = """あなたは「星の王子さま」の価値観を大切にする語り手です。
@@ -46,27 +47,22 @@ def _get_line_openai_model() -> str:
     return _get_env_model("LINE_OPENAI_MODEL", _get_openai_model())
 
 
+def _get_base_url() -> str:
+    return get_openai_base_url() or "https://api.openai.com"
+
+
 def _get_base_url_host() -> str:
-    base_url = get_openai_base_url()
-    parsed = urlparse(base_url or "https://api.openai.com")
+    parsed = urlparse(_get_base_url())
     return parsed.hostname or "unknown"
 
 
-def _infer_provider(base_url_host: str) -> str:
-    host = base_url_host.lower()
-    if "googleapis" in host:
-        return "gemini"
-    if "openai.com" in host:
-        return "openai"
-    return "custom"
-
-
 def get_line_prince_config() -> dict[str, str]:
+    base_url = _get_base_url()
     base_url_host = _get_base_url_host()
     return {
         "base_url_host": base_url_host,
         "model": _get_line_openai_model(),
-        "provider": _infer_provider(base_url_host),
+        "provider": infer_provider(base_url),
     }
 
 

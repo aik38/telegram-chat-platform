@@ -8,17 +8,9 @@ import re
 import unicodedata
 from collections import deque
 from datetime import datetime, time, timedelta, timezone
-from pathlib import Path
 from urllib.parse import urlencode
 from time import monotonic, perf_counter
 from typing import Any, Awaitable, Callable, Iterable, Sequence
-
-from dotenv import load_dotenv
-
-dotenv_path = Path(
-    os.getenv("DOTENV_FILE", Path(__file__).resolve().parents[1] / ".env")
-)
-load_dotenv(dotenv_path, override=False)
 
 from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
 from aiogram.exceptions import TelegramBadRequest
@@ -52,18 +44,8 @@ from openai import (
     RateLimitError,
 )
 
-from core.config import (
-    ADMIN_USER_IDS,
-    OPENAI_API_KEY,
-    ONE_MESSAGE_TOKENS,
-    PASS_7D_DAILY_LIMIT,
-    PASS_30D_DAILY_LIMIT,
-    SUPPORT_EMAIL,
-    TELEGRAM_BOT_TOKEN,
-    THROTTLE_CALLBACK_INTERVAL_SEC,
-    THROTTLE_MESSAGE_INTERVAL_SEC,
-    TRIAL_FREE_CREDITS,
-)
+from core.config import AppConfig, load_config
+from core.env_utils import infer_provider, validate_model_base_url
 from core.llm_client import get_openai_base_url, make_openai_client
 from core.db import (
     TicketColumn,
@@ -100,9 +82,9 @@ from core.db import (
     USAGE_TIMEZONE,
 )
 from core.monetization import (
-    PAYWALL_ENABLED,
     effective_has_pass,
     effective_pass_expires_at,
+    get_paywall_enabled,
     get_user_with_default,
 )
 from core.logging import request_id_var, setup_logging
@@ -131,15 +113,31 @@ from core.tarot.spreads import Spread
 from core.store.catalog import Product, get_product, iter_products
 
 from bot.texts.ja import HELP_TEXT_TEMPLATE
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
+
+bot: Bot | None = None
+client = None
 dp = Dispatcher()
 tarot_router = Router()
 arisa_router = Router()
-client = make_openai_client(OPENAI_API_KEY)
 
 logger = logging.getLogger(__name__)
-CHARACTER = os.getenv("CHARACTER", "").strip().lower()
-BOT_MODE = "arisa" if CHARACTER == "arisa" else "default"
+CONFIG: AppConfig | None = None
+DOTENV_PATH = None
+CHARACTER = ""
+BOT_MODE = "default"
+ADMIN_USER_IDS: set[int] = set()
+SUPPORT_EMAIL = "hasegawaarisa1@gmail.com"
+THROTTLE_MESSAGE_INTERVAL_SEC = 1.2
+THROTTLE_CALLBACK_INTERVAL_SEC = 0.8
+ONE_MESSAGE_TOKENS = 600
+TRIAL_FREE_CREDITS = 10
+PASS_7D_DAILY_LIMIT = 30
+PASS_30D_DAILY_LIMIT = 50
+PAYWALL_ENABLED = False
+OPENAI_MODEL = "gpt-4o-mini"
+LINE_OPENAI_MODEL = OPENAI_MODEL
+IMAGE_ADDON_ENABLED = False
+_MIDDLEWARES_CONFIGURED = False
 
 
 def _get_env_model(name: str, fallback: str) -> str:
@@ -150,14 +148,68 @@ def _get_env_model(name: str, fallback: str) -> str:
     return raw or fallback
 
 
-OPENAI_MODEL = _get_env_model("OPENAI_MODEL", "gpt-4o-mini")
-dp.message.middleware(ThrottleMiddleware(min_interval_sec=THROTTLE_MESSAGE_INTERVAL_SEC))
-# Callback queries are lightly throttled to absorb rapid taps without dropping the bot.
-dp.callback_query.middleware(
-    ThrottleMiddleware(
-        min_interval_sec=THROTTLE_CALLBACK_INTERVAL_SEC, apply_to_callbacks=True
-    )
-)
+def _apply_runtime_config() -> None:
+    global ADMIN_USER_IDS
+    global BOT_MODE
+    global CHARACTER
+    global CONFIG
+    global DOTENV_PATH
+    global LINE_OPENAI_MODEL
+    global IMAGE_ADDON_ENABLED
+    global ONE_MESSAGE_TOKENS
+    global OPENAI_MODEL
+    global PASS_7D_DAILY_LIMIT
+    global PASS_30D_DAILY_LIMIT
+    global PAYWALL_ENABLED
+    global SUPPORT_EMAIL
+    global THROTTLE_CALLBACK_INTERVAL_SEC
+    global THROTTLE_MESSAGE_INTERVAL_SEC
+    global TRIAL_FREE_CREDITS
+    global bot
+    global client
+    global _MIDDLEWARES_CONFIGURED
+
+    CONFIG = load_config()
+    DOTENV_PATH = CONFIG.dotenv_path
+    ADMIN_USER_IDS = CONFIG.admin_user_ids
+    SUPPORT_EMAIL = CONFIG.support_email
+    THROTTLE_MESSAGE_INTERVAL_SEC = CONFIG.throttle_message_interval_sec
+    THROTTLE_CALLBACK_INTERVAL_SEC = CONFIG.throttle_callback_interval_sec
+    ONE_MESSAGE_TOKENS = CONFIG.one_message_tokens
+    TRIAL_FREE_CREDITS = CONFIG.trial_free_credits
+    PASS_7D_DAILY_LIMIT = CONFIG.pass_7d_daily_limit
+    PASS_30D_DAILY_LIMIT = CONFIG.pass_30d_daily_limit
+    PAYWALL_ENABLED = get_paywall_enabled()
+    OPENAI_MODEL = _get_env_model("OPENAI_MODEL", "gpt-4o-mini")
+    LINE_OPENAI_MODEL = _get_env_model("LINE_OPENAI_MODEL", OPENAI_MODEL)
+    IMAGE_ADDON_ENABLED = os.getenv("IMAGE_ADDON_ENABLED", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+    CHARACTER = os.getenv("CHARACTER", "").strip().lower()
+    BOT_MODE = "arisa" if CHARACTER == "arisa" else "default"
+
+    bot = Bot(token=CONFIG.telegram_bot_token)
+    client = make_openai_client(CONFIG.openai_api_key)
+
+    if not _MIDDLEWARES_CONFIGURED:
+        dp.message.middleware(
+            ThrottleMiddleware(min_interval_sec=THROTTLE_MESSAGE_INTERVAL_SEC)
+        )
+        # Callback queries are lightly throttled to absorb rapid taps without dropping the bot.
+        dp.callback_query.middleware(
+            ThrottleMiddleware(
+                min_interval_sec=THROTTLE_CALLBACK_INTERVAL_SEC,
+                apply_to_callbacks=True,
+            )
+        )
+        _MIDDLEWARES_CONFIGURED = True
+
+    ARISA_PASS_PRODUCTS["ARISA_PASS_7D"]["daily_limit"] = PASS_7D_DAILY_LIMIT
+    ARISA_PASS_PRODUCTS["ARISA_PASS_30D"]["daily_limit"] = PASS_30D_DAILY_LIMIT
 
 
 def _build_request_id(event: CallbackQuery | Message) -> str:
@@ -195,12 +247,6 @@ FREE_ONE_ORACLE_POST_TRIAL_PER_DAY = 1
 FREE_GENERAL_CHAT_PER_DAY = 2
 FREE_GENERAL_CHAT_DAYS = 5
 ONE_ORACLE_MEMORY: dict[tuple[int, str], int] = {}
-IMAGE_ADDON_ENABLED = os.getenv("IMAGE_ADDON_ENABLED", "false").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
 GENERAL_CHAT_BLOCK_NOTICE_COOLDOWN = timedelta(hours=1)
 PURCHASE_DEDUP_TTL_SECONDS = 30.0
 USER_MODE: dict[int, str] = {}
@@ -4903,6 +4949,7 @@ async def handle_message(message: Message) -> None:
     await handle_general_chat(message, user_query=text)
 
 async def main() -> None:
+    _apply_runtime_config()
     setup_logging()
     db_ok, db_messages = check_db_health()
     for message in db_messages:
@@ -4910,10 +4957,18 @@ async def main() -> None:
     if not db_ok:
         logger.error("DB health check failed; exiting for safety.")
         raise SystemExit(1)
-    openai_base_url = get_openai_base_url() or "default"
+    openai_base_url = get_openai_base_url()
+    validate_model_base_url(openai_base_url, OPENAI_MODEL, "OPENAI_MODEL")
+    validate_model_base_url(openai_base_url, LINE_OPENAI_MODEL, "LINE_OPENAI_MODEL")
+    provider = infer_provider(openai_base_url)
+    openai_base_url_label = openai_base_url or "default"
+    # Example: OpenAI runtime config -> base_url=https://api.openai.com model=gpt-4o-mini line_model=gpt-4o-mini provider=openai
     logger.info(
-        "OpenAI config",
-        extra={"mode": "startup", "openai_base_url": openai_base_url, "openai_model": OPENAI_MODEL},
+        "OpenAI runtime config -> base_url=%s model=%s line_model=%s provider=%s",
+        openai_base_url_label,
+        OPENAI_MODEL,
+        LINE_OPENAI_MODEL,
+        provider,
     )
     logger.info(
         "Starting akolasia_tarot_bot",
@@ -4923,13 +4978,15 @@ async def main() -> None:
             "paywall_enabled": PAYWALL_ENABLED,
             "polling": True,
             "character": CHARACTER or None,
-            "dotenv_file": str(dotenv_path),
+            "dotenv_file": str(DOTENV_PATH),
         },
     )
     if BOT_MODE == "arisa":
         dp.include_router(arisa_router)
     else:
         dp.include_router(tarot_router)
+    if bot is None:
+        raise RuntimeError("Bot is not initialized.")
     me = await bot.get_me()
     logger.info(
         "Bot startup info",
@@ -4938,7 +4995,7 @@ async def main() -> None:
             "bot_mode": BOT_MODE,
             "bot_username": getattr(me, "username", None),
             "character": CHARACTER or None,
-            "dotenv_file": str(dotenv_path),
+            "dotenv_file": str(DOTENV_PATH),
             "paywall_enabled": PAYWALL_ENABLED,
         },
     )

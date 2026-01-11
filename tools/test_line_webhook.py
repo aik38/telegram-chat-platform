@@ -5,10 +5,10 @@ import hashlib
 import hmac
 import json
 import os
-from pathlib import Path
 
 import httpx
-from dotenv import load_dotenv
+
+from core.env_utils import load_environment
 
 
 def compute_signature(channel_secret: str, body: bytes) -> str:
@@ -17,8 +17,7 @@ def compute_signature(channel_secret: str, body: bytes) -> str:
 
 
 def main() -> None:
-    project_root = Path(__file__).resolve().parents[1]
-    load_dotenv(project_root / ".env", override=False)
+    load_environment()
 
     webhook_url = os.getenv("LINE_WEBHOOK_URL", "http://localhost:8000/webhooks/line")
     channel_secret = os.getenv("LINE_CHANNEL_SECRET")
