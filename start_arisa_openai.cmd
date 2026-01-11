@@ -5,6 +5,6 @@ if not exist ".env.arisa.openai" (
   pause
   exit /b 1
 )
-copy /Y ".env.arisa.openai" ".env" >nul
+set "DOTENV_FILE=.env.arisa.openai"
 powershell -ExecutionPolicy Bypass -File "scripts\run_default.ps1"
 pause

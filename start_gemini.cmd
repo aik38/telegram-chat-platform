@@ -1,5 +1,5 @@
 @echo off
 cd /d "%~dp0"
-copy /Y ".env.gemini" ".env" >nul
+set "DOTENV_FILE=.env.gemini"
 powershell -ExecutionPolicy Bypass -File "scripts\run_default.ps1"
 pause

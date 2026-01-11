@@ -27,14 +27,14 @@ PowerShell で **1コマンド** で Bot（aiogram）を起動する手順です
 
 ### ダブルクリック起動（cmd）
 
-- `start_openai.cmd`: `.env.openai` → `.env` に差し替え、`scripts/run_default.ps1` を起動。
-- `start_gemini.cmd`: `.env.gemini` → `.env` に差し替え、`scripts/run_default.ps1` を起動。
-- `start_arisa.cmd`: `.env.arisa` → `.env` に差し替え、`scripts/run_arisa.ps1` を起動。
-- `start_line_prince_gemini.cmd`: `.env.gemini` → `.env` に差し替え、`tools/start_line.ps1`（LINE API + ngrok）を起動。
-- `start_line.cmd`: `.env` をそのまま使って `tools/start_line.ps1` を起動。
-- `start_line_gemini.cmd` / `start_line_openai.cmd`: `.env.gemini` / `.env.openai` → `.env` に差し替え、`scripts/run_line.ps1` を起動。
+- `start_openai.cmd`: `DOTENV_FILE=.env.openai` を指定し、`scripts/run_default.ps1` を起動。
+- `start_gemini.cmd`: `DOTENV_FILE=.env.gemini` を指定し、`scripts/run_default.ps1` を起動。
+- `start_arisa.cmd`: `DOTENV_FILE=.env.arisa` を指定し、`scripts/run_arisa.ps1` を起動。
+- `start_line_prince_gemini.cmd`: `DOTENV_FILE=.env.gemini` を指定し、`tools/start_line.ps1`（LINE API + ngrok）を起動。
+- `start_line.cmd`: `DOTENV_FILE` 未指定のまま `tools/start_line.ps1` を起動（`.env` を読む）。
+- `start_line_gemini.cmd` / `start_line_openai.cmd`: `DOTENV_FILE=.env.gemini` / `.env.openai` を指定し、`scripts/run_line.ps1` を起動。
 
-> `.env` が現在の有効設定です。.env を更新した場合は **必ずプロセスを再起動** してください。`.env.gemini` / `.env.openai` はプリセットとしてコピーして使います。
+> `.env` はデフォルト設定です。`DOTENV_FILE` を指定しない場合は `.env` を読み込みます。環境切替後は **必ずプロセスを再起動** してください。
 
 ### Arisa を動かす
 
@@ -380,15 +380,16 @@ ngrok http 8000
 
 ## 運用：環境切替（Gemini / OpenAI）
 
-このリポジトリは `.env` を差し替えるだけで LLM 接続先を切り替えられます。  
-（例: `.env.gemini` / `.env.openai` を用意しておき、使う日に `.env` にコピーします）
+このリポジトリは `DOTENV_FILE` を指定するだけで LLM 接続先を切り替えられます。  
+（例: `.env.gemini` / `.env.openai` を用意しておき、起動時に `DOTENV_FILE` を指定します）
 
 ### Geminiで動かしたい日
 
 PowerShell でリポジトリ直下にて実行します。
 
 ```powershell
-Copy-Item .env.gemini .env -Force
+$env:DOTENV_FILE = ".env.gemini"
+powershell -ExecutionPolicy Bypass -File scripts/run_default.ps1
 ````
 
 その後、Windows 側の起動ショートカット（ダブルクリック）で起動してください。
@@ -396,19 +397,31 @@ Copy-Item .env.gemini .env -Force
 ### OpenAIに戻す日
 
 ```powershell
-Copy-Item .env.openai .env -Force
+$env:DOTENV_FILE = ".env.openai"
+powershell -ExecutionPolicy Bypass -File scripts/run_default.ps1
 ```
 
 その後、Windows 側の起動ショートカット（ダブルクリック）で起動してください。
 
 注意:
 
-* 切替は「起動前」に行ってください（起動中に `.env` を差し替えても反映されません）
+* 切替は「起動前」に行ってください（起動中に `DOTENV_FILE` を切り替えても反映されません）
 * `.env` 内で `OPENAI_BASE_URL` / `OPENAI_MODEL` / `OPENAI_API_KEY` を重複定義しないでください（意図しない値が読まれる原因になります）
 
 ## Gemini/OpenAIの切替手順（追記）
 
-- Geminiで動かしたい日: `Copy-Item .env.gemini .env -Force`
-- OpenAIに戻す日: `Copy-Item .env.openai .env -Force`
+- Geminiで動かしたい日: `DOTENV_FILE=.env.gemini` を指定して起動
+- OpenAIに戻す日: `DOTENV_FILE=.env.openai` を指定して起動
 - その後ダブルクリック起動でOK（起動中なら停止してから切替）
 - `.env` に同じキー（OPENAI_BASE_URL 等）を複数回書かないでください
+
+## Windows起動の切替確認（.envを触らずに6パターン）
+
+`.env` を上書きせずに `DOTENV_FILE` で切替できることを確認する手順です。起動中のプロセスは必ず停止してから次へ進めてください。
+
+1. Tarot (OpenAI): `start_openai.cmd` をダブルクリック → 起動ログで `DOTENV_FILE=.env.openai` を確認。
+2. Tarot (Gemini): `start_gemini.cmd` をダブルクリック → 起動ログで `DOTENV_FILE=.env.gemini` を確認。
+3. Arisa (OpenAI): `start_arisa_openai.cmd` をダブルクリック → 起動ログで `DOTENV_FILE=.env.arisa.openai` を確認。
+4. Arisa (Gemini): `start_arisa_gemini.cmd` をダブルクリック → 起動ログで `DOTENV_FILE=.env.arisa.gemini` を確認。
+5. LINE (OpenAI): `start_line_openai.cmd` をダブルクリック → 起動ログで `DOTENV_FILE=.env.openai` を確認。
+6. LINE (Gemini): `start_line_gemini.cmd` をダブルクリック → 起動ログで `DOTENV_FILE=.env.gemini` を確認。

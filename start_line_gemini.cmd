@@ -1,6 +1,6 @@
 @echo off
 cd /d "%~dp0"
-copy /Y ".env.gemini" ".env" >nul
+set "DOTENV_FILE=.env.gemini"
 if exist "scripts\run_line.ps1" (
   powershell -ExecutionPolicy Bypass -File "scripts\run_line.ps1"
 ) else if exist "scripts\run_api.ps1" (
