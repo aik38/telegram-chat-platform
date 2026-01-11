@@ -25,6 +25,18 @@ DEFAULT_SYSTEM_PROMPT = """あなたは「星の王子さま」の価値観を�
 """
 
 
+def _get_env_model(name: str, fallback: str) -> str:
+    raw = os.getenv(name)
+    if raw is None:
+        return fallback
+    raw = raw.strip()
+    return raw or fallback
+
+
+OPENAI_MODEL = _get_env_model("OPENAI_MODEL", "gpt-4o-mini")
+LINE_OPENAI_MODEL = _get_env_model("LINE_OPENAI_MODEL", OPENAI_MODEL)
+
+
 def _get_system_prompt() -> str:
     return os.getenv("PRINCE_SYSTEM_PROMPT", DEFAULT_SYSTEM_PROMPT)
 
@@ -54,7 +66,7 @@ class PrinceChatService:
                 completion = await asyncio.get_running_loop().run_in_executor(
                     None,
                     lambda: self.client.chat.completions.create(
-                        model=os.getenv("LINE_OPENAI_MODEL", "gpt-4o-mini"),
+                        model=LINE_OPENAI_MODEL,
                         messages=list(messages),
                         temperature=0.8,
                     ),

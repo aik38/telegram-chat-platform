@@ -388,3 +388,10 @@ Copy-Item .env.openai .env -Force
 
 * 切替は「起動前」に行ってください（起動中に `.env` を差し替えても反映されません）
 * `.env` 内で `OPENAI_BASE_URL` / `OPENAI_MODEL` / `OPENAI_API_KEY` を重複定義しないでください（意図しない値が読まれる原因になります）
+
+## Gemini/OpenAIの切替手順（追記）
+
+- Geminiで動かしたい日: `Copy-Item .env.gemini .env -Force`
+- OpenAIに戻す日: `Copy-Item .env.openai .env -Force`
+- その後ダブルクリック起動でOK（起動中なら停止してから切替）
+- `.env` に同じキー（OPENAI_BASE_URL 等）を複数回書かないでください
