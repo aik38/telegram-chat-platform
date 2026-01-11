@@ -25,6 +25,14 @@ pip install -r requirements.txt
 
 PowerShell で **1コマンド** で Bot（aiogram）を起動する手順です。API サーバー（Uvicorn）は別コマンドなので、Bot を動かしたい場合は以下のスクリプトを使ってください。
 
+### ダブルクリック起動（cmd）
+
+- `start_openai.cmd`: `.env.openai` → `.env` に差し替え、`scripts/run_default.ps1` を起動。
+- `start_gemini.cmd`: `.env.gemini` → `.env` に差し替え、`scripts/run_default.ps1` を起動。
+- `start_arisa.cmd`: `.env.arisa` → `.env` に差し替え、`scripts/run_arisa.ps1` を起動。
+- `start_line_prince_gemini.cmd`: `.env.gemini` → `.env` に差し替え、`tools/start_line.ps1`（LINE API + ngrok）を起動。
+- `start_line.cmd`: `.env` をそのまま使って `tools/start_line.ps1` を起動。
+
 ### Arisa を動かす
 
 1. リポジトリ直下に `.env.arisa` を作成し、`TELEGRAM_BOT_TOKEN`, `OPENAI_API_KEY`, `SQLITE_DB_PATH`, `CHARACTER=arisa`, `PAYWALL_ENABLED` など必要な環境変数を設定します。
