@@ -32,6 +32,9 @@ PowerShell で **1コマンド** で Bot（aiogram）を起動する手順です
 - `start_arisa.cmd`: `.env.arisa` → `.env` に差し替え、`scripts/run_arisa.ps1` を起動。
 - `start_line_prince_gemini.cmd`: `.env.gemini` → `.env` に差し替え、`tools/start_line.ps1`（LINE API + ngrok）を起動。
 - `start_line.cmd`: `.env` をそのまま使って `tools/start_line.ps1` を起動。
+- `start_line_gemini.cmd` / `start_line_openai.cmd`: `.env.gemini` / `.env.openai` → `.env` に差し替え、`scripts/run_line.ps1` を起動。
+
+> `.env` が現在の有効設定です。.env を更新した場合は **必ずプロセスを再起動** してください。`.env.gemini` / `.env.openai` はプリセットとしてコピーして使います。
 
 ### Arisa を動かす
 
@@ -43,10 +46,16 @@ PowerShell で **1コマンド** で Bot（aiogram）を起動する手順です
 powershell -ExecutionPolicy Bypass -File scripts/run_arisa.ps1
 ```
 
-### 通常（.env）で起動する
+### Tarot（通常モード / .env）で起動する
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/run_default.ps1
+powershell -ExecutionPolicy Bypass -File scripts/run_tarot.ps1
+```
+
+### LINE API サーバーを起動する
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_line.ps1
 ```
 
 ### 補足

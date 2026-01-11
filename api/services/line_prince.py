@@ -16,7 +16,7 @@ from openai import (
     RateLimitError,
 )
 
-from core.env_utils import infer_provider
+from core.env_utils import infer_provider, load_environment, validate_model_base_url
 from core.llm_client import get_openai_base_url, make_openai_client
 
 DEFAULT_SYSTEM_PROMPT = """あなたは「星の王子さま」の価値観を大切にする語り手です。
@@ -57,21 +57,26 @@ def _get_base_url_host() -> str:
 
 
 def get_line_prince_config() -> dict[str, str]:
+    load_environment()
     base_url = _get_base_url()
     base_url_host = _get_base_url_host()
+    model = _get_line_openai_model()
+    validate_model_base_url(base_url, model, "LINE_OPENAI_MODEL")
     return {
         "base_url_host": base_url_host,
-        "model": _get_line_openai_model(),
+        "model": model,
         "provider": infer_provider(base_url),
     }
 
 
 class PrinceChatService:
     def __init__(self, client: OpenAI | None = None) -> None:
+        load_environment()
         api_key = os.getenv("OPENAI_API_KEY")
         self.client = client or make_openai_client(api_key)
         self.system_prompt = _get_system_prompt()
         self.model = _get_line_openai_model()
+        validate_model_base_url(get_openai_base_url(), self.model, "LINE_OPENAI_MODEL")
 
     async def generate_reply(self, user_message: str) -> str:
         messages: Iterable[dict[str, str]] = (
