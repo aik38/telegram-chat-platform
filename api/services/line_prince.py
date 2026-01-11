@@ -15,6 +15,8 @@ from openai import (
     RateLimitError,
 )
 
+from core.llm_client import make_openai_client
+
 DEFAULT_SYSTEM_PROMPT = """あなたは「星の王子さま」の価値観を大切にする語り手です。
 - 原作の長文引用や台詞の丸写しは避け、エッセンスや心の動きを短く伝えてください。
 - 返答は日本語で、3〜8行の短め中心。深呼吸が必要なら少し長くしても構いません。
@@ -30,7 +32,7 @@ def _get_system_prompt() -> str:
 class PrinceChatService:
     def __init__(self, client: OpenAI | None = None) -> None:
         api_key = os.getenv("OPENAI_API_KEY")
-        self.client = client or (OpenAI(api_key=api_key) if api_key else None)
+        self.client = client or make_openai_client(api_key)
         self.system_prompt = _get_system_prompt()
 
     async def generate_reply(self, user_message: str) -> str:

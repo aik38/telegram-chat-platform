@@ -91,6 +91,10 @@ powershell -ExecutionPolicy Bypass -File scripts/run_default.ps1
 
 - `.env.example` を `.env` にコピーして値を埋めてください。
 - `SUPPORT_EMAIL`: 利用規約やサポート案内に表示するメールアドレス。未設定時は `hasegawaarisa1@gmail.com` が使われますが、ダミー表記を避けるため環境変数で上書きする運用を推奨します。
+- `OPENAI_BASE_URL`: OpenAI互換APIのエンドポイント。未設定/空の場合は従来通りOpenAIへ接続します。
+  - 例: Gemini (OpenAI互換) `https://generativelanguage.googleapis.com/v1beta/openai/`
+  - 例: DeepSeek (OpenAI互換) `https://api.deepseek.com/v1`
+- `OPENAI_MODEL` / `LINE_OPENAI_MODEL`: 接続先に合わせてモデルIDの変更が必要です。
 - `THROTTLE_MESSAGE_INTERVAL_SEC` / `THROTTLE_CALLBACK_INTERVAL_SEC`: テキスト送信・ボタン連打それぞれの最小間隔（秒）。未設定時は 1.2s / 0.8s のままです。負荷試験時に環境変数で調整してください。
 - LINE Webhook 用（LINE Messaging APIを利用する場合）
   - `LINE_CHANNEL_SECRET`: チャネルシークレット。署名検証に使用します。

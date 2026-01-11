@@ -48,7 +48,6 @@ from openai import (
     APITimeoutError,
     AuthenticationError,
     BadRequestError,
-    OpenAI,
     PermissionDeniedError,
     RateLimitError,
 )
@@ -65,6 +64,7 @@ from core.config import (
     THROTTLE_MESSAGE_INTERVAL_SEC,
     TRIAL_FREE_CREDITS,
 )
+from core.llm_client import make_openai_client
 from core.db import (
     TicketColumn,
     UserRecord,
@@ -135,7 +135,7 @@ bot = Bot(token=TELEGRAM_BOT_TOKEN)
 dp = Dispatcher()
 tarot_router = Router()
 arisa_router = Router()
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = make_openai_client(OPENAI_API_KEY)
 
 logger = logging.getLogger(__name__)
 CHARACTER = os.getenv("CHARACTER", "").strip().lower()
