@@ -360,3 +360,31 @@ ngrok http 8000
 - `docs/launch_checklist.md`: ショートラン＆48hチェックリスト
 - `docs/runbook.md`: 運用・トラブルシュート
 - `docs/pricing_notes.md`: 価格と課金まわりのメモ
+
+## 運用：環境切替（Gemini / OpenAI）
+
+このリポジトリは `.env` を差し替えるだけで LLM 接続先を切り替えられます。  
+（例: `.env.gemini` / `.env.openai` を用意しておき、使う日に `.env` にコピーします）
+
+### Geminiで動かしたい日
+
+PowerShell でリポジトリ直下にて実行します。
+
+```powershell
+Copy-Item .env.gemini .env -Force
+````
+
+その後、Windows 側の起動ショートカット（ダブルクリック）で起動してください。
+
+### OpenAIに戻す日
+
+```powershell
+Copy-Item .env.openai .env -Force
+```
+
+その後、Windows 側の起動ショートカット（ダブルクリック）で起動してください。
+
+注意:
+
+* 切替は「起動前」に行ってください（起動中に `.env` を差し替えても反映されません）
+* `.env` 内で `OPENAI_BASE_URL` / `OPENAI_MODEL` / `OPENAI_API_KEY` を重複定義しないでください（意図しない値が読まれる原因になります）
