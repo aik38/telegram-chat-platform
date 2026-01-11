@@ -21,6 +21,7 @@ dist/
 
 # Logs
 *.log
+diag_*.txt
 
 # SQLite (local runtime)
 db/*.db
