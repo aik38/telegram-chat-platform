@@ -1,9 +1,24 @@
+Param(
+    [string]$DotenvFile
+)
+
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
 
-$env:DOTENV_FILE = ".env.arisa"
-Write-Host "Starting Arisa bot with DOTENV_FILE=$env:DOTENV_FILE (ensure TELEGRAM_BOT_TOKEN and CHARACTER=arisa)"
+if (-not $DotenvFile) {
+    $DotenvFile = $env:DOTENV_FILE
+}
+if (-not $DotenvFile) {
+    $DotenvFile = ".env.arisa.gemini"
+}
+if (-not (Test-Path $DotenvFile)) {
+    Write-Error "Missing $DotenvFile. Create it (e.g. .env.arisa.gemini or .env.arisa.openai) and retry."
+    exit 1
+}
+$env:DOTENV_FILE = $DotenvFile
+$env:CHARACTER = "arisa"
+Write-Host "Starting Arisa bot with DOTENV_FILE=$env:DOTENV_FILE and CHARACTER=$env:CHARACTER"
 
 & "$PSScriptRoot\windows_bootstrap.ps1" -DotenvFile $env:DOTENV_FILE

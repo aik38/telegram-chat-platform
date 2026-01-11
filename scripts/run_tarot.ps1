@@ -1,8 +1,8 @@
-$ErrorActionPreference = "Stop"
-
 Param(
     [string]$DotenvFile
 )
+
+$ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $RepoRoot
