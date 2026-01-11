@@ -113,7 +113,7 @@ Write-Host "Listening ports (8000, 8001, 4040):"
 foreach ($port in $ports) {
     $entries = $listeners | Where-Object { $_.LocalPort -eq $port }
     if (-not $entries) {
-        Write-Host "  Port $port: (no listeners)"
+        Write-Host "  Port $($port): (no listeners)"
         continue
     }
     foreach ($entry in $entries) {
@@ -121,7 +121,7 @@ foreach ($port in $ports) {
         $procInfo = $processInfo[$pid]
         $procName = if ($procInfo) { $procInfo.Name } else { "unknown" }
         $cmdLine = if ($procInfo -and $procInfo.CommandLine) { $procInfo.CommandLine } else { "(no command line)" }
-        Write-Host "  Port $port: PID $pid | $procName | $cmdLine"
+        Write-Host "  Port $($port): PID $pid | $procName | $cmdLine"
     }
 }
 
@@ -201,3 +201,4 @@ if ($exitCode -eq 0) {
 }
 
 exit $exitCode
+
