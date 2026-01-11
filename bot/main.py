@@ -45,7 +45,7 @@ from openai import (
 )
 
 from core.config import AppConfig, load_config
-from core.env_utils import infer_provider, validate_model_base_url
+from core.env_utils import infer_provider, mask_secret, validate_model_base_url
 from core.llm_client import get_openai_base_url, make_openai_client
 from core.db import (
     TicketColumn,
@@ -4962,6 +4962,7 @@ async def main() -> None:
     validate_model_base_url(openai_base_url, LINE_OPENAI_MODEL, "LINE_OPENAI_MODEL")
     provider = infer_provider(openai_base_url)
     openai_base_url_label = openai_base_url or "default"
+    dotenv_file = os.getenv("DOTENV_FILE") or ".env"
     # Example: OpenAI runtime config -> base_url=https://api.openai.com model=gpt-4o-mini line_model=gpt-4o-mini provider=openai
     logger.info(
         "OpenAI runtime config -> base_url=%s model=%s line_model=%s provider=%s",
@@ -4969,6 +4970,16 @@ async def main() -> None:
         OPENAI_MODEL,
         LINE_OPENAI_MODEL,
         provider,
+    )
+    logger.info(
+        "Environment source -> DOTENV_FILE=%s dotenv_path=%s",
+        dotenv_file,
+        DOTENV_PATH,
+    )
+    logger.info(
+        "Environment secrets (masked) -> TELEGRAM_BOT_TOKEN=%s OPENAI_API_KEY=%s",
+        mask_secret(os.getenv("TELEGRAM_BOT_TOKEN")),
+        mask_secret(os.getenv("OPENAI_API_KEY")),
     )
     logger.info(
         "Starting akolasia_tarot_bot",

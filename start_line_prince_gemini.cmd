@@ -1,4 +1,4 @@
 @echo off
 cd /d "%~dp0"
-copy /Y ".env.gemini" ".env" >nul
+set "DOTENV_FILE=.env.gemini"
 pwsh -NoExit -ExecutionPolicy Bypass -File "%~dp0tools\start_line.ps1"

@@ -40,6 +40,17 @@ def load_environment() -> Path:
     return path
 
 
+def mask_secret(value: str | None, prefix: int = 2, suffix: int = 2) -> str:
+    if not value:
+        return "missing"
+    trimmed = value.strip()
+    if not trimmed:
+        return "missing"
+    if len(trimmed) <= prefix + suffix:
+        return "*" * len(trimmed)
+    return f"{trimmed[:prefix]}***{trimmed[-suffix:]}"
+
+
 def infer_provider(base_url: str | None) -> str:
     if not base_url:
         return "openai"

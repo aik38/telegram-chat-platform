@@ -5,6 +5,6 @@ if not exist ".env.arisa.gemini" (
   pause
   exit /b 1
 )
-copy /Y ".env.arisa.gemini" ".env" >nul
+set "DOTENV_FILE=.env.arisa.gemini"
 powershell -ExecutionPolicy Bypass -File "scripts\run_default.ps1"
 pause
