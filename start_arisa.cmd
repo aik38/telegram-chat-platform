@@ -8,5 +8,4 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-powershell -ExecutionPolicy Bypass -File "scripts\run_arisa.ps1"
-pause
+start "" /D "%REPO%" cmd /k "powershell -NoProfile -ExecutionPolicy Bypass -File \"scripts\run_arisa.ps1\""
