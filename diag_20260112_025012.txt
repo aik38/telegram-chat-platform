@@ -1,0 +1,107 @@
+### telegram-chat-platform diagnose 20260112_025012
+PWD=C:\Users\OWNER\OneDrive\デスクトップ\telegram-chat-platform
+--- git ---
+2673e00
+## main...origin/main
+?? diag_20260112_025012.txt
+--- launchers ---
+
+    Directory: C:\Users\OWNER\OneDrive\デスクトップ\telegram-chat-platform
+
+Mode        LastWriteTime Length Name
+----        ------------- ------ ----
+-a--- 2026/01/12     2:14    258 start_arisa_gemini.cmd
+-a--- 2026/01/12     2:14    258 start_arisa_openai.cmd
+-a--- 2026/01/12     2:14    129 start_arisa.cmd
+-a--- 2026/01/12     2:14    132 start_gemini.cmd
+-a--- 2026/01/12     2:14    413 start_line_gemini.cmd
+-a--- 2026/01/12     2:14    413 start_line_openai.cmd
+-a--- 2026/01/12     2:14    129 start_line_prince_gemini.cmd
+-a--- 2025/12/28    13:42     82 start_line.cmd
+-a--- 2026/01/12     2:14    132 start_openai.cmd
+
+    Directory: C:\Users\OWNER\OneDrive\デスクトップ\telegram-chat-platform\scripts
+
+Mode        LastWriteTime Length Name
+----        ------------- ------ ----
+-a--- 2026/01/12     1:38    327 run_arisa.ps1
+-a--- 2026/01/12     1:38    140 run_default.ps1
+-a--- 2026/01/12     1:38   1130 run_line.ps1
+-a--- 2026/01/12     1:38    429 run_tarot.ps1
+
+
+--- run_tarot.ps1 head (1-120) ---
+  1: $ErrorActionPreference = "Stop"
+  2: 
+  3: Param(
+  4:     [string]$DotenvFile
+  5: )
+  6: 
+  7: $RepoRoot = Split-Path -Parent $PSScriptRoot
+  8: Set-Location $RepoRoot
+  9: 
+ 10: if (-not $DotenvFile) {
+ 11:     $DotenvFile = $env:DOTENV_FILE
+ 12: }
+ 13: if (-not $DotenvFile) {
+ 14:     $DotenvFile = ".env"
+ 15: }
+ 16: $env:DOTENV_FILE = $DotenvFile
+ 17: 
+ 18: Write-Host "Starting Tarot bot with DOTENV_FILE=$DotenvFile"
+ 19: & "$PSScriptRoot\windows_bootstrap.ps1" -DotenvFile $env:DOTENV_FILE
+--- env files ---
+
+    Directory: C:\Users\OWNER\OneDrive\デスクトップ\telegram-chat-platform
+
+Mode        LastWriteTime Length Name
+----        ------------- ------ ----
+-a--- 2026/01/11    21:53    716 .env
+-a--- 2026/01/10     2:46    347 .env.arisa
+-a--- 2026/01/12     1:51    349 .env.arisa.gemini
+-a--- 2026/01/12     1:51    308 .env.arisa.openai
+-a--- 2026/01/11    19:59    763 .env.example
+-a--- 2026/01/11    22:14    631 .env.gemini
+-a--- 2026/01/11    21:53    716 .env.openai
+
+
+--- key env lines ---
+[.env]
+TELEGRAM_BOT_TOKEN=8102799667:AAFjYRLMcUpu9pOd5KjwWR9vmY4Viz_9flI
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o-mini
+LINE_OPENAI_MODEL=gpt-4o-mini
+[.env.gemini]
+TELEGRAM_BOT_TOKEN=8102799667:AAFjYRLMcUpu9pOd5KjwWR9vmY4Viz_9flI
+OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+OPENAI_MODEL=gemini-2.5-flash
+LINE_OPENAI_MODEL=gemini-2.5-flash
+[.env.openai]
+TELEGRAM_BOT_TOKEN=8102799667:AAFjYRLMcUpu9pOd5KjwWR9vmY4Viz_9flI
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o-mini
+LINE_OPENAI_MODEL=gpt-4o-mini
+[.env.arisa]
+TELEGRAM_BOT_TOKEN=8432224071:AAHi9jIw-JNsjb169-hXuQ4Ysk3ogMy1hk0
+CHARACTER=arisa
+[.env.arisa.gemini]
+TELEGRAM_BOT_TOKEN=8432224071:AAHi9jIw-JNsjb169-hXuQ4Ysk3ogMy1hk0
+CHARACTER=arisa
+OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+OPENAI_MODEL=gemini-2.5-flash
+LINE_OPENAI_MODEL=gemini-2.5-flash
+[.env.arisa.openai]
+TELEGRAM_BOT_TOKEN=8432224071:AAHi9jIw-JNsjb169-hXuQ4Ysk3ogMy1hk0
+CHARACTER=arisa
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o-mini
+LINE_OPENAI_MODEL=gpt-4o-mini
+--- port 8000 listeners (LINE) ---
+
+--- processes (python/pwsh) ---
+
+   Id ProcessName Path
+   -- ----------- ----
+17396 pwsh        C:\Program Files\PowerShell\7\pwsh.exe
+
+
