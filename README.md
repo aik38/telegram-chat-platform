@@ -28,6 +28,7 @@ pip install -r requirements.txt
 - LINE は既定で `8000` を使うため、同時起動する場合は `LINE_PORT`（または `API_PORT`）を変えてください。`start_line_openai.cmd` は既定で `8001` を使うように設定しています。
 - LINE は同時に 1 つだけ起動してください（`8000`/`8001` のどちらか片方）。
 - ショートカットは `tools/make_shortcuts.ps1` で再生成してください。Desktop の「旧」フォルダに残っている旧ショートカットは誤起動の原因になるため使用しないでください。
+- **重要**: `.\\scripts\\*.ps1` は **リポジトリ直下での実行が前提** です。別ディレクトリから起動する場合は **絶対パス指定**（例: `$repo=...; pwsh -File (Join-Path $repo 'scripts\\run_line.ps1') ...`）か、`tools` 配下のラッパー（`tools/start_line_openai.cmd` など）を使ってください。
 
 ## Troubleshooting（Windows）
 
@@ -56,6 +57,11 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\telegram-chat-platform
 
 > 相対パスの `.env.*` はリポジトリ直下に解決され、トークンはマスクして表示されます。
 
+### git stash の引用符（PowerShell）
+
+- `git stash drop stash@{0}` は PowerShell で誤解釈されることがあるため、**必ず引用符**で囲んでください。
+  - 例: `git stash drop "stash@{0}"`
+
 **出力例（マスク済みトークン）**
 
 ```text
@@ -83,6 +89,7 @@ PowerShell で **1コマンド** で Bot（aiogram）を起動する手順です
 - `start_line_prince_gemini.cmd`: `DOTENV_FILE=.env.gemini` を指定し、`tools/start_line.ps1`（LINE API + ngrok）を起動。
 - `start_line.cmd`: `DOTENV_FILE` 未指定のまま `tools/start_line.ps1` を起動（`.env` を読む）。
 - `start_line_gemini.cmd` / `start_line_openai.cmd`: `DOTENV_FILE=.env.gemini` / `.env.openai` を指定し、`scripts/run_line.ps1` を起動。
+- `tools/start_line_openai.cmd`: **任意の場所から実行可能**な LINE (OpenAI) ラッパー。`scripts/run_line.ps1` を絶対パス指定で起動します。
 
 > `.env` はデフォルト設定です。`DOTENV_FILE` を指定しない場合は `.env` を読み込みます。環境切替後は **必ずプロセスを再起動** してください。
 
@@ -106,6 +113,13 @@ powershell -ExecutionPolicy Bypass -File scripts/run_tarot.ps1
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/run_line.ps1
+```
+
+**どこからでも起動（PowerShell 7 / 絶対パス）**
+
+```powershell
+$repo = "C:\Users\OWNER\OneDrive\デスクトップ\telegram-chat-platform"
+pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo "scripts\run_line.ps1") -DotenvFile (Join-Path $repo ".env.openai")
 ```
 
 絶対パスで実行する場合（カレント不問）:

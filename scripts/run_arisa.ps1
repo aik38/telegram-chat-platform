@@ -7,15 +7,27 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $RepoRoot
 
+function Resolve-DotenvPath {
+    param(
+        [string]$DotenvFile
+    )
+    if (-not $DotenvFile) {
+        return $null
+    }
+    if ([System.IO.Path]::IsPathRooted($DotenvFile)) {
+        return [System.IO.Path]::GetFullPath($DotenvFile)
+    }
+    return [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $DotenvFile))
+}
+
 if (-not $DotenvFile) {
     $DotenvFile = $env:DOTENV_FILE
 }
 if (-not $DotenvFile) {
     $DotenvFile = ".env.arisa.gemini"
 }
-$DotenvDisplay = $DotenvFile
-$DotenvPath = if ([System.IO.Path]::IsPathRooted($DotenvFile)) { $DotenvFile } else { Join-Path $RepoRoot $DotenvFile }
-$DotenvPath = [System.IO.Path]::GetFullPath($DotenvPath)
+$DotenvPath = Resolve-DotenvPath -DotenvFile $DotenvFile
+$DotenvDisplay = $DotenvPath
 if (-not (Test-Path $DotenvPath)) {
     Write-Error "Missing $DotenvDisplay. Create it (e.g. .env.arisa.gemini or .env.arisa.openai) and retry."
     exit 1
@@ -31,4 +43,4 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-& "$PSScriptRoot\windows_bootstrap.ps1" -DotenvFile $DotenvFile
+& "$PSScriptRoot\windows_bootstrap.ps1" -DotenvFile $DotenvPath
