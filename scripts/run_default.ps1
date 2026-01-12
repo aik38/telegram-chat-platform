@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$RepoRoot = Split-Path -Parent $PSScriptRoot
+$RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $RepoRoot
 
-& "$PSScriptRoot\run_tarot.ps1"
+& (Join-Path $PSScriptRoot "run_tarot.ps1")

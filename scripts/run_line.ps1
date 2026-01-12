@@ -4,7 +4,7 @@ Param(
 
 $ErrorActionPreference = "Stop"
 
-$RepoRoot = Split-Path -Parent $PSScriptRoot
+$RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $RepoRoot
 
 if (-not $DotenvFile) {
@@ -13,7 +13,10 @@ if (-not $DotenvFile) {
 if (-not $DotenvFile) {
     $DotenvFile = ".env"
 }
-$env:DOTENV_FILE = $DotenvFile
+$DotenvDisplay = $DotenvFile
+$DotenvPath = if ([System.IO.Path]::IsPathRooted($DotenvFile)) { $DotenvFile } else { Join-Path $RepoRoot $DotenvFile }
+$DotenvPath = [System.IO.Path]::GetFullPath($DotenvPath)
+$env:DOTENV_FILE = $DotenvPath
 
 $Port = $env:LINE_PORT
 if (-not $Port) {
@@ -29,7 +32,7 @@ if (-not [int]::TryParse($Port, [ref]$ParsedPort)) {
 $Port = $ParsedPort
 $env:LINE_PORT = $Port
 
-$DoctorPath = Join-Path $RepoRoot "scripts\\doctor.ps1"
+$DoctorPath = Join-Path $PSScriptRoot "doctor.ps1"
 & powershell -NoProfile -ExecutionPolicy Bypass -File $DoctorPath
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Doctor checks failed. Fix the issues above and retry."
@@ -55,9 +58,10 @@ if (Test-PortInUse -Port $Port) {
     exit 1
 }
 
-if (-not (Test-Path ".venv")) {
+$VenvPath = Join-Path $RepoRoot ".venv"
+if (-not (Test-Path $VenvPath)) {
     Write-Host "Creating virtual environment in .venv..."
-    python -m venv .venv
+    python -m venv $VenvPath
 }
 
 $PythonExe = Join-Path $RepoRoot ".venv\Scripts\python.exe"
@@ -68,13 +72,15 @@ if (-not (Test-Path $PythonExe)) {
 Write-Host "Upgrading pip/setuptools/wheel..."
 & $PythonExe -m pip install -U pip setuptools wheel
 
-if (Test-Path "requirements.txt") {
+$RequirementsTxt = Join-Path $RepoRoot "requirements.txt"
+$RequirementsFile = Join-Path $RepoRoot "requirements"
+if (Test-Path $RequirementsTxt) {
     Write-Host "Installing dependencies from requirements.txt..."
-    & $PythonExe -m pip install -r "requirements.txt"
-} elseif (Test-Path "requirements") {
+    & $PythonExe -m pip install -r $RequirementsTxt
+} elseif (Test-Path $RequirementsFile) {
     Write-Host "Installing dependencies from requirements..."
-    & $PythonExe -m pip install -r "requirements"
+    & $PythonExe -m pip install -r $RequirementsFile
 }
 
-Write-Host "Starting LINE API server with DOTENV_FILE=$DotenvFile on port $Port"
+Write-Host "Starting LINE API server with DOTENV_FILE=$DotenvDisplay on port $Port"
 & $PythonExe -m uvicorn api.main:app --host 0.0.0.0 --port $Port

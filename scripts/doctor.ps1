@@ -1,6 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+Set-Location $RepoRoot
 
 function Get-ProcessInfoMap {
     $map = @{}
@@ -201,4 +202,3 @@ if ($exitCode -eq 0) {
 }
 
 exit $exitCode
-
