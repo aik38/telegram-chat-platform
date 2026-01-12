@@ -117,11 +117,11 @@ foreach ($port in $ports) {
         continue
     }
     foreach ($entry in $entries) {
-        $pid = $entry.OwningProcess
-        $procInfo = $processInfo[$pid]
+        $procId = $entry.OwningProcess
+        $procInfo = $processInfo[$procId]
         $procName = if ($procInfo) { $procInfo.Name } else { "unknown" }
         $cmdLine = if ($procInfo -and $procInfo.CommandLine) { $procInfo.CommandLine } else { "(no command line)" }
-        Write-Host "  Port ${port}: PID $pid | $procName | $cmdLine"
+        Write-Host "  Port ${port}: PID $procId | $procName | $cmdLine"
     }
 }
 
