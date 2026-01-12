@@ -1,3 +1,9 @@
+Param(
+    [string]$DotenvFile,
+    [int[]]$Ports = @(8000, 8001, 4040),
+    [switch]$CheckPorts
+)
+
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
@@ -99,19 +105,18 @@ function Mask-Token {
 
 $processInfo = Get-ProcessInfoMap
 
-$ports = @(8000, 8001, 4040)
 $listeners = @()
 try {
-    $listeners = Get-NetTCPConnection -State Listen -LocalPort $ports -ErrorAction SilentlyContinue
+    $listeners = Get-NetTCPConnection -State Listen -LocalPort $Ports -ErrorAction SilentlyContinue
 } catch {
     $listeners = @()
 }
 
 Write-Host "Doctor: repo root $RepoRoot"
 Write-Host ""
-Write-Host "Listening ports (8000, 8001, 4040):"
+Write-Host ("Listening ports ({0}):" -f ($Ports -join ", "))
 
-foreach ($port in $ports) {
+foreach ($port in $Ports) {
     $entries = $listeners | Where-Object { $_.LocalPort -eq $port }
     if (-not $entries) {
         Write-Host "  Port ${port}: (no listeners)"
@@ -164,6 +169,25 @@ if (-not $trackedProcesses) {
 
 $exitCode = 0
 
+$requestedDotenvPath = $null
+$requestedToken = $null
+if ($DotenvFile) {
+    $requestedDotenvPath = Resolve-DotenvPath -DotenvFile $DotenvFile
+    if (-not (Test-Path $requestedDotenvPath)) {
+        Write-Error "Dotenv file not found: $requestedDotenvPath"
+        exit 1
+    }
+    $requestedToken = Get-DotenvValue -FilePath $requestedDotenvPath -Key "TELEGRAM_BOT_TOKEN"
+    if ($requestedToken) {
+        Write-Host ""
+        Write-Host ("Requested DOTENV_FILE: {0}" -f $requestedDotenvPath)
+        Write-Host ("Requested TELEGRAM_BOT_TOKEN: {0}" -f (Mask-Token -Token $requestedToken))
+    } else {
+        Write-Host ""
+        Write-Warning ("Requested DOTENV_FILE has no TELEGRAM_BOT_TOKEN: {0}" -f $requestedDotenvPath)
+    }
+}
+
 $tokenOwners = @{}
 foreach ($proc in $trackedProcesses) {
     $dotenvRaw = Get-DotenvFileFromCommandLine -CommandLine $proc.CommandLine
@@ -181,6 +205,21 @@ foreach ($proc in $trackedProcesses) {
     $tokenOwners[$token] += $proc.ProcessId
 }
 
+$requestedTokenOwners = @()
+if ($requestedToken) {
+    foreach ($entry in $tokenOwners.GetEnumerator()) {
+        if ($entry.Key -eq $requestedToken) {
+            $requestedTokenOwners = $entry.Value
+        }
+    }
+    if ($requestedTokenOwners.Count -gt 0) {
+        Write-Host ""
+        Write-Error "同一TELEGRAM_BOT_TOKENのため同時起動できない。別Botトークンを用意して .env.arisa_* に設定してください"
+        Write-Error ("  Token {0} is already used by PID(s): {1}" -f (Mask-Token -Token $requestedToken), (($requestedTokenOwners | Sort-Object) -join ", "))
+        $exitCode = 1
+    }
+}
+
 $duplicateTokens = $tokenOwners.GetEnumerator() | Where-Object { $_.Value.Count -gt 1 }
 if ($duplicateTokens) {
     Write-Host ""
@@ -191,6 +230,19 @@ if ($duplicateTokens) {
         Write-Warning "  Token $masked is used by PID(s): $pids"
     }
     $exitCode = 1
+}
+
+if ($CheckPorts) {
+    $portConflicts = $listeners | Group-Object -Property LocalPort
+    if ($portConflicts) {
+        Write-Host ""
+        Write-Warning "Requested ports already in use:"
+        foreach ($group in $portConflicts) {
+            $owners = $group.Group | ForEach-Object { $_.OwningProcess } | Sort-Object -Unique
+            Write-Warning ("  Port {0}: PID(s) {1}" -f $group.Name, ($owners -join ", "))
+        }
+        $exitCode = 1
+    }
 }
 
 if ($exitCode -eq 0) {

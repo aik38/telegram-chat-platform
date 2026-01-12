@@ -28,6 +28,12 @@ pip install -r requirements.txt
 - LINE は既定で `8000` を使うため、同時起動する場合は `LINE_PORT`（または `API_PORT`）を変えてください。`start_line_openai.cmd` は既定で `8001` を使うように設定しています。
 - LINE は同時に 1 つだけ起動してください（`8000`/`8001` のどちらか片方）。
 - ショートカットは `tools/make_shortcuts.ps1` で再生成してください。Desktop の「旧」フォルダに残っている旧ショートカットは誤起動の原因になるため使用しないでください。
+- 起動ショートカットは **サーバー/ボットを常駐起動するだけ** で、UI は出ません。
+  - LINE: `http://127.0.0.1:8001/docs`（例）を開けることを確認。
+  - API: `http://127.0.0.1:8000/docs` を開けることを確認。
+  - Telegram: Bot にメッセージを送る or `scripts/doctor.ps1` で polling プロセス確認。
+  - 停止: **Ctrl+C**（正常稼働中はウィンドウを閉じない）。
+  - 起動ログは `40_logs/launcher_YYYYMMDD_HHMMSS.log` に保存されます。
 - **重要**: `.\\scripts\\*.ps1` は **リポジトリ直下での実行が前提** です。別ディレクトリから起動する場合は **絶対パス指定**（例: `$repo=...; pwsh -File (Join-Path $repo 'scripts\\run_line.ps1') ...`）か、`tools` 配下のラッパー（`tools/start_line_openai.cmd` など）を使ってください。
 
 ## Troubleshooting（Windows）
@@ -55,7 +61,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/doctor.ps1
 pwsh -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\telegram-chat-platform\scripts\doctor.ps1"
 ```
 
-> 相対パスの `.env.*` はリポジトリ直下に解決され、トークンはマスクして表示されます。
+> 相対パスの `.env.*` はリポジトリ直下に解決され、トークンはマスクして表示されます。`-DotenvFile` を渡すと起動前のトークン衝突チェックも行えます。
 
 ### git stash の引用符（PowerShell）
 
