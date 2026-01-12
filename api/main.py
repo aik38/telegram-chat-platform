@@ -68,6 +68,11 @@ async def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/health")
+async def health_check_root() -> dict[str, bool]:
+    return {"ok": True}
+
+
 @app.on_event("startup")
 def run_migrations() -> None:
     _log_env_status()
