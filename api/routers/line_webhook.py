@@ -5,8 +5,6 @@ import hashlib
 import hmac
 import os
 import logging
-from typing import Iterable
-
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -115,11 +113,6 @@ def _get_admin_user_ids() -> set[str]:
     return {user_id.strip() for user_id in raw.split(",") if user_id.strip()}
 
 
-def _should_verify_signature() -> bool:
-    raw = os.getenv("LINE_VERIFY_SIGNATURE", "true").strip().lower()
-    return raw not in {"0", "false", "off", "no"}
-
-
 def _get_line_free_messages_per_month() -> int:
     raw = os.getenv("LINE_FREE_MESSAGES_PER_MONTH", "30").strip()
     try:
@@ -221,26 +214,24 @@ async def _process_line_webhook(
     line_client: LineReplyClient = Depends(get_line_client),
     prince_chat_service: PrinceChatService = Depends(get_prince_chat_service),
 ) -> dict[str, str]:
-    verify = _should_verify_signature()
     channel_secret = os.getenv("LINE_CHANNEL_SECRET")
     body = await request.body()
 
-    if verify:
-        if not x_line_signature:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing X-Line-Signature header",
-            )
-        if not channel_secret:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="LINE_CHANNEL_SECRET is not configured",
-            )
-        if not verify_signature(channel_secret, body, x_line_signature):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid LINE signature",
-            )
+    if not x_line_signature:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing X-Line-Signature header",
+        )
+    if not channel_secret:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="LINE_CHANNEL_SECRET is not configured",
+        )
+    if not verify_signature(channel_secret, body, x_line_signature):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid LINE signature",
+        )
 
     try:
         payload = LineWebhookPayload.model_validate_json(body)
@@ -249,21 +240,18 @@ async def _process_line_webhook(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid payload"
         ) from exc
 
-    admin_user_ids = _get_admin_user_ids()
-    message_events: Iterable[LineEvent] = (
-        event
-        for event in payload.events
-        if (event.message and event.message.type == "text") or event.postback
+    logger.info(
+        "LINE webhook received path=%s status=%s events=%s",
+        request.url.path,
+        status.HTTP_200_OK,
+        len(payload.events),
     )
-
-    for event in message_events:
-        await _handle_message_event(event, db, line_client, admin_user_ids, prince_chat_service)
-
     return {"status": "ok"}
 
 
 @router.post("/line/webhook")
 @router.post("/webhooks/line")
+@router.post("/webhooks/line/")
 async def handle_line_webhook(
     request: Request,
     x_line_signature: str | None = Header(default=None, alias="X-Line-Signature"),
