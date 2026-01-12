@@ -4,7 +4,7 @@ Param(
 
 $ErrorActionPreference = "Stop"
 
-$RepoRoot = Split-Path -Parent $PSScriptRoot
+$RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $RepoRoot
 
 if (-not $DotenvFile) {
@@ -13,11 +13,15 @@ if (-not $DotenvFile) {
 if (-not $DotenvFile) {
     $DotenvFile = ".env"
 }
-$env:DOTENV_FILE = $DotenvFile
+$DotenvDisplay = $DotenvFile
+$DotenvPath = if ([System.IO.Path]::IsPathRooted($DotenvFile)) { $DotenvFile } else { Join-Path $RepoRoot $DotenvFile }
+$DotenvPath = [System.IO.Path]::GetFullPath($DotenvPath)
+$env:DOTENV_FILE = $DotenvPath
 
-if (-not (Test-Path ".venv")) {
+$VenvPath = Join-Path $RepoRoot ".venv"
+if (-not (Test-Path $VenvPath)) {
     Write-Host "Creating virtual environment in .venv..."
-    python -m venv .venv
+    python -m venv $VenvPath
 }
 
 $PythonExe = Join-Path $RepoRoot ".venv\Scripts\python.exe"
@@ -28,13 +32,15 @@ if (-not (Test-Path $PythonExe)) {
 Write-Host "Upgrading pip/setuptools/wheel..."
 & $PythonExe -m pip install -U pip setuptools wheel
 
-if (Test-Path "requirements.txt") {
+$RequirementsTxt = Join-Path $RepoRoot "requirements.txt"
+$RequirementsFile = Join-Path $RepoRoot "requirements"
+if (Test-Path $RequirementsTxt) {
     Write-Host "Installing dependencies from requirements.txt..."
-    & $PythonExe -m pip install -r "requirements.txt"
-} elseif (Test-Path "requirements") {
+    & $PythonExe -m pip install -r $RequirementsTxt
+} elseif (Test-Path $RequirementsFile) {
     Write-Host "Installing dependencies from requirements..."
-    & $PythonExe -m pip install -r "requirements"
+    & $PythonExe -m pip install -r $RequirementsFile
 }
 
-Write-Host "Starting Telegram bot with DOTENV_FILE=$DotenvFile"
+Write-Host "Starting Telegram bot with DOTENV_FILE=$DotenvDisplay"
 & $PythonExe -m bot.main

@@ -48,6 +48,12 @@ pip install -r requirements.txt
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/doctor.ps1
 ```
 
+どの作業ディレクトリからでも実行できます（例: 絶対パス指定）。
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\telegram-chat-platform\scripts\doctor.ps1"
+```
+
 > 相対パスの `.env.*` はリポジトリ直下に解決され、トークンはマスクして表示されます。
 
 **出力例（マスク済みトークン）**
@@ -100,6 +106,12 @@ powershell -ExecutionPolicy Bypass -File scripts/run_tarot.ps1
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/run_line.ps1
+```
+
+絶対パスで実行する場合（カレント不問）:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\telegram-chat-platform\scripts\run_line.ps1" -DotenvFile "C:\path\to\telegram-chat-platform\.env.openai"
 ```
 
 ### 補足
