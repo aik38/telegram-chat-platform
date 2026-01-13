@@ -1,5 +1,6 @@
 Param(
-    [string]$DotenvFile
+    [string]$DotenvFile,
+    [int]$Port
 )
 
 $ErrorActionPreference = "Stop"
@@ -31,22 +32,26 @@ $DotenvPath = Resolve-DotenvPath -DotenvFile $DotenvCandidate
 $DotenvDisplay = $DotenvPath
 $env:DOTENV_FILE = $DotenvPath
 
-$Port = $env:LINE_PORT
-if (-not $Port) {
-    $Port = $env:API_PORT
+$PortCandidate = $Port
+if (-not $PortCandidate) {
+    $PortCandidate = $env:LINE_PORT
 }
-if (-not $Port) {
-    $Port = 8000
+if (-not $PortCandidate) {
+    $PortCandidate = $env:API_PORT
+}
+if (-not $PortCandidate) {
+    $PortCandidate = 8000
 }
 [int]$ParsedPort = 0
-if (-not [int]::TryParse($Port, [ref]$ParsedPort)) {
-    throw "Invalid LINE_PORT/API_PORT value: $Port"
+if (-not [int]::TryParse($PortCandidate, [ref]$ParsedPort)) {
+    throw "Invalid port value: $PortCandidate"
 }
 $Port = $ParsedPort
 $env:LINE_PORT = $Port
 
 $DoctorPath = Join-Path $PSScriptRoot "doctor.ps1"
-& powershell -NoProfile -ExecutionPolicy Bypass -File $DoctorPath
+$PsExe = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
+& $PsExe -NoProfile -ExecutionPolicy Bypass -File $DoctorPath -Mode Preflight
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Doctor checks failed. Fix the issues above and retry."
     exit $LASTEXITCODE
@@ -97,3 +102,7 @@ if (Test-Path $RequirementsTxt) {
 
 Write-Host "Starting LINE API server with DOTENV_FILE=$DotenvDisplay on port $Port"
 & $PythonExe -m uvicorn api.main:app --host 0.0.0.0 --port $Port
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Uvicorn exited with code $LASTEXITCODE."
+    exit $LASTEXITCODE
+}

@@ -1,6 +1,9 @@
 Param(
     [string]$DotenvFile,
-    [int[]]$Ports = @(8000, 8001, 4040),
+    [int]$ApiPort = 8000,
+    [int]$NgrokPort = 4040,
+    [ValidateSet("Preflight", "Runtime")]
+    [string]$Mode = "Runtime",
     [switch]$CheckPorts
 )
 
@@ -103,8 +106,22 @@ function Mask-Token {
     return ($Token.Substring(0, 4) + "..." + $Token.Substring($Token.Length - 4))
 }
 
+function Test-HttpEndpoint {
+    param(
+        [string]$Url,
+        [int]$TimeoutSec = 3
+    )
+    try {
+        $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec $TimeoutSec -ErrorAction Stop
+        return ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400)
+    } catch {
+        return $false
+    }
+}
+
 $processInfo = Get-ProcessInfoMap
 
+$Ports = @($ApiPort, $NgrokPort)
 $listeners = @()
 try {
     $listeners = Get-NetTCPConnection -State Listen -LocalPort $Ports -ErrorAction SilentlyContinue
@@ -113,6 +130,7 @@ try {
 }
 
 Write-Host "Doctor: repo root $RepoRoot"
+Write-Host ("Mode: {0}" -f $Mode)
 Write-Host ""
 Write-Host ("Listening ports ({0}):" -f ($Ports -join ", "))
 
@@ -242,6 +260,39 @@ if ($CheckPorts) {
             Write-Warning ("  Port {0}: PID(s) {1}" -f $group.Name, ($owners -join ", "))
         }
         $exitCode = 1
+    }
+}
+
+if ($Mode -eq "Runtime") {
+    Write-Host ""
+    Write-Host "Runtime checks:"
+
+    $apiListeners = $listeners | Where-Object { $_.LocalPort -eq $ApiPort }
+    if (-not $apiListeners) {
+        Write-Error "API port $ApiPort is not listening."
+        $exitCode = 1
+    } else {
+        $apiUrl = "http://127.0.0.1:$ApiPort/api/health"
+        if (-not (Test-HttpEndpoint -Url $apiUrl)) {
+            Write-Error "API health check failed: $apiUrl"
+            $exitCode = 1
+        } else {
+            Write-Host "  API health OK: $apiUrl"
+        }
+    }
+
+    $ngrokListeners = $listeners | Where-Object { $_.LocalPort -eq $NgrokPort }
+    if (-not $ngrokListeners) {
+        Write-Error "ngrok inspector port $NgrokPort is not listening."
+        $exitCode = 1
+    } else {
+        $ngrokUrl = "http://127.0.0.1:$NgrokPort/api/tunnels"
+        if (-not (Test-HttpEndpoint -Url $ngrokUrl)) {
+            Write-Error "ngrok API check failed: $ngrokUrl"
+            $exitCode = 1
+        } else {
+            Write-Host "  ngrok API OK: $ngrokUrl"
+        }
     }
 }
 
