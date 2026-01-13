@@ -20,13 +20,14 @@ function Resolve-DotenvPath {
     return [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $DotenvFile))
 }
 
-if (-not $DotenvFile) {
-    $DotenvFile = $env:DOTENV_FILE
+$DotenvCandidate = $DotenvFile
+if (-not $DotenvCandidate) {
+    $DotenvCandidate = $env:DOTENV_FILE
 }
-if (-not $DotenvFile) {
-    $DotenvFile = ".env"
+if (-not $DotenvCandidate) {
+    $DotenvCandidate = ".env"
 }
-$DotenvPath = Resolve-DotenvPath -DotenvFile $DotenvFile
+$DotenvPath = Resolve-DotenvPath -DotenvFile $DotenvCandidate
 $DotenvDisplay = $DotenvPath
 $env:DOTENV_FILE = $DotenvPath
 
