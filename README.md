@@ -25,23 +25,27 @@ pip install -r requirements.txt
 
 - Tarot / Arisa は **Telegram Bot**、LINE は **API サーバー** です（Bot と API は別プロセス）。
 - Gemini / OpenAI の切り替えは `DOTENV_FILE` で行います（例: `.env.gemini` / `.env.openai` / `.env.arisa.gemini` / `.env.arisa.openai`）。`start_*` の cmd はそれぞれ既定の `DOTENV_FILE` を設定済みです。
-- LINE は既定で `8000` を使うため、同時起動する場合は `LINE_PORT`（または `API_PORT`）を変えてください。`start_line_openai.cmd` は既定で `8001` を使うように設定しています。
-- LINE は同時に 1 つだけ起動してください（`8000`/`8001` のどちらか片方）。
+- LINE は既定で `8000` を使います（`LINE_PORT` / `API_PORT` / `-Port` で変更可能）。同時起動は想定しません。
 - ショートカットは `tools/make_shortcuts.ps1` で再生成してください。Desktop の「旧」フォルダに残っている旧ショートカットは誤起動の原因になるため使用しないでください。
 - 起動ショートカットは **サーバー/ボットを常駐起動するだけ** で、UI は出ません。
-  - LINE: `http://127.0.0.1:8001/docs`（例）を開けることを確認。
+  - LINE: `http://127.0.0.1:8000/docs` を開けることを確認。
   - API: `http://127.0.0.1:8000/docs` を開けることを確認。
   - Telegram: Bot にメッセージを送る or `scripts/doctor.ps1` で polling プロセス確認。
   - 停止: **Ctrl+C**（正常稼働中はウィンドウを閉じない）。
-  - 起動ログは `40_logs/launcher_YYYYMMDD_HHMMSS.log` に保存されます。
+  - 起動ログは `40_logs/` に保存されます。
 - **重要**: `.\\scripts\\*.ps1` は **リポジトリ直下での実行が前提** です。別ディレクトリから起動する場合は **絶対パス指定**（例: `$repo=...; pwsh -File (Join-Path $repo 'scripts\\run_line.ps1') ...`）か、`tools` 配下のラッパー（`tools/start_line_openai.cmd` など）を使ってください。
+
+### Deprecated（互換ラッパー）
+
+- `tools/start_line.ps1`: 互換のため残していますが `tools/start_line_stable.ps1` に委譲します。
+- `tools/start_line_gemini_stable.ps1`: 互換のため残していますが `tools/start_line_stable.ps1` に委譲します。
 
 ## Troubleshooting（Windows）
 
 ### WinError 10048（ポート衝突）
 
-- `uvicorn` 起動時に `WinError 10048` が出る場合、`8000` または `8001` が既に使用中です。
-- `scripts/doctor.ps1` は `8000/8001/4040` の待受プロセスを一覧し、PID / プロセス / コマンドラインを表示します（`start_*` からも自動実行されます）。
+- `uvicorn` 起動時に `WinError 10048` が出る場合、`8000` が既に使用中です。
+- `scripts/doctor.ps1` は `8000/4040` の待受プロセスを一覧し、PID / プロセス / コマンドラインを表示します。
 - 既に使用中であれば、該当プロセスを停止するか `LINE_PORT`（`API_PORT`）を変更してください。
 
 ### TelegramConflictError（同一トークンの多重 polling）
@@ -61,7 +65,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/doctor.ps1
 pwsh -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\telegram-chat-platform\scripts\doctor.ps1"
 ```
 
-> 相対パスの `.env.*` はリポジトリ直下に解決され、トークンはマスクして表示されます。`-DotenvFile` を渡すと起動前のトークン衝突チェックも行えます。
+> 既定は Runtime チェック（`/api/health` と ngrok inspector を検証）です。起動前の確認だけにしたい場合は `-Mode Preflight` を指定してください。相対パスの `.env.*` はリポジトリ直下に解決され、トークンはマスクして表示されます。`-DotenvFile` を渡すと起動前のトークン衝突チェックも行えます。
 
 ### git stash の引用符（PowerShell）
 
@@ -72,10 +76,10 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\telegram-chat-platform
 
 ```text
 Doctor: repo root C:\work\telegram-chat-platform
+Mode: Runtime
 
-Listening ports (8000, 8001, 4040):
+Listening ports (8000, 4040):
   Port 8000: PID 1234 | python.exe | python -m uvicorn api.main:app --port 8000
-  Port 8001: (no listeners)
   Port 4040: PID 4567 | ngrok.exe | ngrok http 8000
 
 Python/ngrok processes with DOTENV_FILE:
@@ -92,10 +96,8 @@ PowerShell で **1コマンド** で Bot（aiogram）を起動する手順です
 - `start_openai.cmd`: `DOTENV_FILE=.env.openai` を指定し、`scripts/run_default.ps1` を起動。
 - `start_gemini.cmd`: `DOTENV_FILE=.env.gemini` を指定し、`scripts/run_default.ps1` を起動。
 - `start_arisa.cmd`: `DOTENV_FILE=.env.arisa` を指定し、`scripts/run_arisa.ps1` を起動。
-- `start_line_prince_gemini.cmd`: `DOTENV_FILE=.env.gemini` を指定し、`tools/start_line.ps1`（LINE API + ngrok）を起動。
-- `start_line.cmd`: `DOTENV_FILE` 未指定のまま `tools/start_line.ps1` を起動（`.env` を読む）。
-- `start_line_gemini.cmd` / `start_line_openai.cmd`: `DOTENV_FILE=.env.gemini` / `.env.openai` を指定し、`scripts/run_line.ps1` を起動。
-- `tools/start_line_openai.cmd`: **任意の場所から実行可能**な LINE (OpenAI) ラッパー。`scripts/run_line.ps1` を絶対パス指定で起動します。
+- `start_line_gemini.cmd` / `start_line_openai.cmd`: `tools/start_line_stable.ps1`（LINE API + ngrok 起動 + 検証）を起動します。
+- `tools/start_line_openai.cmd`: **任意の場所から実行可能**な LINE (OpenAI) ラッパー。`tools/start_line_stable.ps1` を絶対パス指定で起動します。
 
 > `.env` はデフォルト設定です。`DOTENV_FILE` を指定しない場合は `.env` を読み込みます。環境切替後は **必ずプロセスを再起動** してください。
 
@@ -116,6 +118,18 @@ powershell -ExecutionPolicy Bypass -File scripts/run_tarot.ps1
 ```
 
 ### LINE API サーバーを起動する
+
+**ワンクリック起動（推奨）**
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File tools/start_line_stable.ps1 -Provider gemini -DotenvFile .env.gemini -Port 8000
+```
+
+- 60〜90 秒以内に `http://127.0.0.1:8000/api/health` と `http://127.0.0.1:4040/api/tunnels` を確認します。
+- ngrok 経由の `https://<public_url>/api/health` も検証し、`LINE_CHANNEL_ACCESS_TOKEN` があれば Webhook URL 更新/テストも実施します。
+- 失敗時は `40_logs` の stdout/stderr の末尾を表示して終了します。
+
+**手動起動**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/run_line.ps1
@@ -355,7 +369,7 @@ python -m pytest -q
 - `.env` の読み込み忘れ対策として、API 側も `python-dotenv` で自動ロードします（既存の環境変数は上書きしません）。
 - 開発時に system python と venv が混ざらないよう、PowerShell 用ショートカットを用意しています。
   - `tools/run_line_api.ps1`: リポジトリ直下に移動して venv を有効化し、`uvicorn api.main:app --host 0.0.0.0 --port 8000` を起動。
-  - `tools/run_ngrok.ps1`: `ngrok http 8000` を実行。二重起動エラーを避けるため、既存 ngrok プロセスがないことを確認してから実行してください。
+  - `tools/run_ngrok.ps1`: `ngrok http 8000` を実行（例: `.\tools\run_ngrok.ps1 -Port 8000`）。二重起動エラーを避けるため、既存 ngrok プロセスがないことを確認してから実行してください。
 - ローカルで LINE Webhook を叩くテスト: `python tools/test_line_webhook.py`
   - `.env` から `LINE_CHANNEL_SECRET` を読み、署名付きで `http://localhost:8000/webhooks/line` に POST します（環境変数 `LINE_WEBHOOK_URL` でURL上書き可）。
   - 応答が `200` であれば、ngrok 経由でも同様に動作する想定です。
@@ -376,7 +390,7 @@ $repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-chat-pl
 別ウィンドウで ngrok:
 
 ```powershell
-$repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-chat-platform"; cd $repo; .\tools\run_ngrok.ps1
+$repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-chat-platform"; cd $repo; .\tools\run_ngrok.ps1 -Port 8000
 ```
 
 ### 手順（詳細）
@@ -387,7 +401,7 @@ $repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-chat-pl
    ```
 2. ngrok 起動（別ウィンドウ）
    ```powershell
-   $repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-chat-platform"; cd $repo; .\tools\run_ngrok.ps1
+   $repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-chat-platform"; cd $repo; .\tools\run_ngrok.ps1 -Port 8000
    ```
 3. `/docs` が 200 になることを確認
    ```powershell

@@ -1,37 +1,17 @@
-$ErrorActionPreference="Stop"
-$repo = Split-Path -Parent $PSScriptRoot   # tools -> repo
-Set-Location $repo
-$env:LINE_PORT = "8000"
+param(
+    [string]$DotenvFile,
+    [ValidateSet("gemini", "openai")]
+    [string]$Provider = "gemini",
+    [int]$Port = 8000
+)
 
-$DoctorPath = Join-Path $repo "scripts\\doctor.ps1"
-& powershell -NoProfile -ExecutionPolicy Bypass -File $DoctorPath
-if ($LASTEXITCODE -ne 0) {
-  Write-Host "Doctor checks failed. Fix the issues above and retry."
-  exit $LASTEXITCODE
+Write-Warning "Deprecated: use tools/start_line_stable.ps1 instead."
+
+$script = Join-Path $PSScriptRoot "start_line_stable.ps1"
+$args = @("-Provider", $Provider, "-Port", $Port)
+if ($DotenvFile) {
+    $args += @("-DotenvFile", $DotenvFile)
 }
 
-if(Test-Path ".\.venv\Scripts\Activate.ps1"){ . .\.venv\Scripts\Activate.ps1 }
-
-function Test-LineApiRunning {
-  try {
-    $r = Invoke-WebRequest "http://127.0.0.1:8000/docs" -UseBasicParsing -TimeoutSec 1
-    return ($r.StatusCode -eq 200)
-  } catch { return $false }
-}
-
-$has8000 = Test-LineApiRunning
-$hasNgrok = @(Get-Process ngrok -ErrorAction SilentlyContinue).Count -gt 0
-
-if(-not $has8000){
-  Start-Process pwsh -ArgumentList @('-NoExit','-Command', "cd `"$repo`"; . .\.venv\Scripts\Activate.ps1; .\tools\run_line_api.ps1") | Out-Null
-} else {
-  Write-Host "LINE API is already running (http://127.0.0.1:8000/docs)."
-}
-
-if(-not $hasNgrok){
-  Start-Process pwsh -ArgumentList @('-NoExit','-Command', "cd `"$repo`"; . .\.venv\Scripts\Activate.ps1; .\tools\run_ngrok.ps1") | Out-Null
-} else {
-  Write-Host "ngrok is already running (http://127.0.0.1:4040)."
-}
-
-Write-Host "Started. Check: http://127.0.0.1:8000/docs  /  http://127.0.0.1:4040"
+& $script @args
+exit $LASTEXITCODE

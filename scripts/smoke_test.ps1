@@ -52,7 +52,8 @@ $DotenvPath = Resolve-DotenvPath -DotenvFile $DotenvFile
 $env:DOTENV_FILE = $DotenvPath
 
 $DoctorPath = Join-Path $PSScriptRoot "doctor.ps1"
-& powershell -NoProfile -ExecutionPolicy Bypass -File $DoctorPath
+$PsExe = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
+& $PsExe -NoProfile -ExecutionPolicy Bypass -File $DoctorPath -Mode Preflight
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Doctor checks failed. Fix the issues above and retry."
     exit $LASTEXITCODE
