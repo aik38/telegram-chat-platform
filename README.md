@@ -23,8 +23,19 @@ pip install -r requirements.txt
 
 ## Windows quick start
 
+### Start (recommended)
+
+- Launcher（推奨）: `tools/launcher.ps1` を 1 つの入口として使います。
+  - Tarot: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/launcher.ps1 -App tarot -Provider gemini`
+  - Arisa: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/launcher.ps1 -App arisa -Provider openai`
+  - LINE: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/launcher.ps1 -App line -Provider gemini -Port 8000`
+- Provider の切り替えは dotenv 名で行います。
+  - Tarot: `.env.gemini` / `.env.openai`
+  - Arisa: `.env.arisa.gemini` / `.env.arisa.openai`
+  - LINE: `.env.gemini` / `.env.openai`
+
 - Tarot / Arisa は **Telegram Bot**、LINE は **API サーバー** です（Bot と API は別プロセス）。
-- Gemini / OpenAI の切り替えは `DOTENV_FILE` で行います（例: `.env.gemini` / `.env.openai` / `.env.arisa.gemini` / `.env.arisa.openai`）。`start_*` の cmd はそれぞれ既定の `DOTENV_FILE` を設定済みです。
+- Gemini / OpenAI の切り替えは `DOTENV_FILE` で行います（例: `.env.gemini` / `.env.openai` / `.env.arisa.gemini` / `.env.arisa.openai`）。`start_*` の cmd は互換ラッパーとして残しています。
 - LINE は既定で `8000` を使います（`LINE_PORT` / `API_PORT` / `-Port` で変更可能）。同時起動は想定しません。
 - ショートカットは `tools/make_shortcuts.ps1` で再生成してください。Desktop の「旧」フォルダに残っている旧ショートカットは誤起動の原因になるため使用しないでください。
 - 起動ショートカットは **サーバー/ボットを常駐起動するだけ** で、UI は出ません。
@@ -37,8 +48,9 @@ pip install -r requirements.txt
 
 ### Deprecated（互換ラッパー）
 
-- `tools/start_line.ps1`: 互換のため残していますが `tools/start_line_stable.ps1` に委譲します。
-- `tools/start_line_gemini_stable.ps1`: 互換のため残していますが `tools/start_line_stable.ps1` に委譲します。
+- `start_*.cmd`: 互換のため残していますが `tools/launcher.ps1` に委譲します。
+- `tools/start_line.ps1`: 互換のため残していますが `tools/launcher.ps1` に委譲します。
+- `tools/start_line_gemini_stable.ps1`: 互換のため残していますが `tools/launcher.ps1` に委譲します。
 
 ## Troubleshooting（Windows）
 
@@ -93,11 +105,10 @@ PowerShell で **1コマンド** で Bot（aiogram）を起動する手順です
 
 ### ダブルクリック起動（cmd）
 
-- `start_openai.cmd`: `DOTENV_FILE=.env.openai` を指定し、`scripts/run_default.ps1` を起動。
-- `start_gemini.cmd`: `DOTENV_FILE=.env.gemini` を指定し、`scripts/run_default.ps1` を起動。
-- `start_arisa.cmd`: `DOTENV_FILE=.env.arisa` を指定し、`scripts/run_arisa.ps1` を起動。
-- `start_line_gemini.cmd` / `start_line_openai.cmd`: `tools/start_line_stable.ps1`（LINE API + ngrok 起動 + 検証）を起動します。
-- `tools/start_line_openai.cmd`: **任意の場所から実行可能**な LINE (OpenAI) ラッパー。`tools/start_line_stable.ps1` を絶対パス指定で起動します。
+- `start_openai.cmd` / `start_gemini.cmd`: `tools/launcher.ps1` に委譲し、Tarot を起動します。
+- `start_arisa_gemini.cmd` / `start_arisa_openai.cmd`: `tools/launcher.ps1` に委譲し、Arisa を起動します。
+- `start_line_gemini.cmd` / `start_line_openai.cmd`: `tools/launcher.ps1` に委譲し、LINE を起動します。
+- `tools/start_line_openai.cmd`: **任意の場所から実行可能**な LINE (OpenAI) 互換ラッパーです。
 
 > `.env` はデフォルト設定です。`DOTENV_FILE` を指定しない場合は `.env` を読み込みます。環境切替後は **必ずプロセスを再起動** してください。
 
@@ -122,7 +133,7 @@ powershell -ExecutionPolicy Bypass -File scripts/run_tarot.ps1
 **ワンクリック起動（推奨）**
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File tools/start_line_stable.ps1 -Provider gemini -DotenvFile .env.gemini -Port 8000
+pwsh -NoProfile -ExecutionPolicy Bypass -File tools/launcher.ps1 -App line -Provider gemini -DotenvFile .env.gemini -Port 8000
 ```
 
 - 60〜90 秒以内に `http://127.0.0.1:8000/api/health` と `http://127.0.0.1:4040/api/tunnels` を確認します。

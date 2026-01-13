@@ -3,10 +3,10 @@ param(
     [int]$Port = 8000
 )
 
-Write-Warning "Deprecated: use tools/start_line_stable.ps1 -Provider gemini instead."
+Write-Warning "Deprecated: use tools/launcher.ps1 instead."
 
-$script = Join-Path $PSScriptRoot "start_line_stable.ps1"
-$args = @("-Provider", "gemini", "-Port", $Port)
+$script = Join-Path $PSScriptRoot "launcher.ps1"
+$args = @("-App", "line", "-Provider", "gemini", "-Port", $Port, "-AutoStart")
 if ($DotenvFile) {
     $args += @("-DotenvFile", $DotenvFile)
 }
