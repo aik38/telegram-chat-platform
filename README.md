@@ -48,11 +48,12 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File tools/launcher.ps1 -App line -Prov
 - LINE は起動前に `8000/4040` の衝突を解消し、既存で正常稼働している場合は維持します。
 - Tarot / Arisa は **Telegram Bot**、LINE は **API サーバー** です（Bot と API は別プロセス）。
 - 旧 `start_*` スクリプトは `tools/legacy/` に移動しています（新規追加はしません）。
-- Provider 切替は `DOTENV_FILE` または `.env.*` で行います。
+- Provider 切替は `DOTENV_FILE` または `.env.*` で行います（優先順位: `-DotenvFile` 引数 > `DOTENV_FILE` 環境変数 > `.env.*` / `.env`）。
   - Tarot: `.env.gemini` / `.env.openai`
   - Arisa: `.env.arisa.gemini` / `.env.arisa.openai`
   - LINE: `.env.gemini` / `.env.openai`
 - 起動ログは `40_logs/` に保存されます。
+- Logs: `40_logs/`（`line_runtime_*.txt` と `line_api_*` / `ngrok_*` の stdout/stderr）
 - **重要**: `.\\scripts\\*.ps1` は **リポジトリ直下での実行が前提** です。別ディレクトリから起動する場合は **絶対パス指定**を使ってください。
 
 #### トラブル時の見方
@@ -144,8 +145,8 @@ powershell -ExecutionPolicy Bypass -File scripts/run_tarot.ps1
 pwsh -NoProfile -ExecutionPolicy Bypass -File tools/launcher.ps1 -App line -Provider gemini -DotenvFile .env.gemini -Port 8000
 ```
 
-- 60〜90 秒以内に `http://127.0.0.1:8000/api/health` と `http://127.0.0.1:4040/api/tunnels` を確認します。
-- ngrok 経由の `https://<public_url>/api/health` も検証し、`LINE_CHANNEL_ACCESS_TOKEN` があれば Webhook URL 更新/テストも実施します。
+- 60〜90 秒以内に `http://127.0.0.1:8000/health` と `http://127.0.0.1:4040/api/tunnels` を確認します。
+- ngrok 経由の `https://<public_url>/health` も検証し、`LINE_CHANNEL_ACCESS_TOKEN` があれば Webhook URL 更新/テストも実施します。
 - 失敗時は `40_logs` の stdout/stderr の末尾を表示して終了します。
 
 **手動起動**
@@ -258,19 +259,21 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\telegram-chat-platform
 - API 起動: `uvicorn api.main:app --reload --port 8000`
 - LINE Webhook（開発向け）:
   1. `.env` に `LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` / `LINE_ADMIN_USER_IDS` を設定。署名検証を暫定的に外す場合のみ `LINE_VERIFY_SIGNATURE=false` を追加。
-  2. API を起動: `uvicorn api.main:app --reload --port 8000`
-  3. 別ターミナルで `ngrok http 8000` を実行し、発行された HTTPS URL を LINE Developers の Webhook URL に設定（例: `https://<ngrok-id>.ngrok.io/line/webhook`）。検証ボタンで 200 OK が返ることを確認。
+  2. `scripts/run_line.ps1` を起動（API → /health 確認 → ngrok の順で自動起動）。
+  3. 起動ログに表示される `Set LINE Webhook URL to: .../webhooks/line` を LINE Developers の Webhook URL に設定。検証ボタンで 200 OK が返ることを確認。
   4. Messaging API > チャネル基本設定で Webhook を有効化し、チャネルアクセストークンを発行。
   5. 友だち追加後にメッセージを送ると、会話モードで「星の王子さま」人格が応答し、月間無料枠（デフォルト 30 回）を超えると上限メッセージを返します。
+  6. **ngrok Free プランでは起動ごとに URL が変わるため、毎回 Webhook URL を更新してください。**
 
 ### LINE開発の最短手順
 
 1. 必要な環境変数をセット：`LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` / `OPENAI_API_KEY`（必要に応じて `PRINCE_SYSTEM_PROMPT` や `LINE_ADMIN_USER_IDS`）。
-2. API を起動：`uvicorn api.main:app --reload --port 8000`
-3. `ngrok http 8000` で公開し、LINE Developers の Webhook URL に `https://<ngrok-id>.ngrok.io/line/webhook` を設定。
+2. `scripts/run_line.ps1` を起動（API 起動 → /health 確認 → ngrok 起動）。
+3. 表示された `https://<ngrok-id>.ngrok.io/webhooks/line` を LINE Developers の Webhook URL に設定。
 4. LINE から `/whoami` を送信し、返ってきた `userId` を `LINE_ADMIN_USER_IDS` に追記して API を再起動（管理者限定メニュー用）。
 5. 本番同等で署名検証を行う（デフォルト ON）。開発時のみ `LINE_VERIFY_SIGNATURE=false` を利用可能。
 6. 実機で 10 往復ほどメッセージを送り、「話す」（星の王子さま人格）と管理者限定の「今日の星」「ミニ占い」が期待通り返ることを確認。
+7. **ngrok Free プランでは起動ごとに URL が変わるため、毎回 Webhook URL を更新してください。**
 
 ### ログ出力
 

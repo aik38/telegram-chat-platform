@@ -44,6 +44,8 @@ function Get-DefaultDotenv {
 $ResolvedDotenv = $null
 if ($DotenvFile) {
     $ResolvedDotenv = Resolve-DotenvPath -DotenvFile $DotenvFile
+} elseif ($env:DOTENV_FILE) {
+    $ResolvedDotenv = Resolve-DotenvPath -DotenvFile $env:DOTENV_FILE
 } else {
     $defaultDotenv = Get-DefaultDotenv -App $App -Provider $Provider
     if ($defaultDotenv) {
@@ -82,7 +84,10 @@ switch ($App) {
     }
     "line" {
         $targetScript = Join-Path $RepoRoot "tools\\line_runtime.ps1"
-        $args = @("-Provider", $Provider, "-Port", $Port)
+        $args = @("-Provider", $Provider)
+        if ($PSBoundParameters.ContainsKey("Port")) {
+            $args += @("-Port", $Port)
+        }
         if ($ResolvedDotenv) {
             $args += @("-DotenvFile", $ResolvedDotenv)
         }

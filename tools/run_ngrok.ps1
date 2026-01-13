@@ -11,9 +11,9 @@ if (-not $ngrokCmd) {
     exit 1
 }
 
-Write-Output "Starting ngrok for port $Port (http://localhost:$Port)..."
+Write-Output "Starting ngrok for port $Port (http://127.0.0.1:$Port)..."
 
-& $ngrokCmd.Source http $Port
+& $ngrokCmd.Source http ("127.0.0.1:{0}" -f $Port)
 if ($LASTEXITCODE -ne 0) {
     Write-Error "ngrok exited with code $LASTEXITCODE."
     exit $LASTEXITCODE
