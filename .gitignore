@@ -51,3 +51,7 @@ desktop.ini
 **/Desktop.ini
 **/desktop.ini
 run_bot.bat
+
+40_logs/
+*.bak_*
+
