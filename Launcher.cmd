@@ -1,7 +1,7 @@
 @echo off
 setlocal enableextensions
 
-set "REPO=%USERPROFILE%\OneDrive\デスクトップ\telegram-chat-platform"
+set "REPO=%USERPROFILE%\OneDrive\繝・せ繧ｯ繝医ャ繝予telegram-chat-platform"
 set "LOG=%USERPROFILE%\launcher_cmd.log"
 
 echo [%DATE% %TIME%] Launcher.cmd start>>"%LOG%" 2>&1
