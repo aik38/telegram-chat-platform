@@ -128,9 +128,13 @@ function Get-ListeningProcessIds {
     $pids = @()
     $netTcpCommand = Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue
     if ($netTcpCommand) {
-        $pids = Get-NetTCPConnection -LocalPort $Port -State Listen `
-            | Select-Object -ExpandProperty OwningProcess -Unique
-        return $pids
+        try {
+            $pids = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue `
+                | Select-Object -ExpandProperty OwningProcess -Unique)
+        } catch {
+            $pids = @()
+        }
+        return $pids | ForEach-Object { [int]$_ } | Select-Object -Unique
     }
 
     $netstatLines = netstat -ano -p TCP | Select-String "LISTENING"
@@ -140,7 +144,7 @@ function Get-ListeningProcessIds {
             $pids += [int]$parts[4]
         }
     }
-    return $pids | Select-Object -Unique
+    return $pids | ForEach-Object { [int]$_ } | Select-Object -Unique
 }
 
 function Resolve-PortConflict {

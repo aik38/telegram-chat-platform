@@ -98,5 +98,16 @@ switch ($App) {
 
 $PsExe = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
 Write-Host "Launcher: $App ($Provider)"
+if ($App -eq "line") {
+    try {
+        & $PsExe -NoProfile -ExecutionPolicy Bypass -File $targetScript @args
+    } catch {
+        Write-Error $_.Exception.Message
+        Read-Host "LINE launcher failed. Press Enter to exit"
+        exit 1
+    }
+    exit $LASTEXITCODE
+}
+
 & $PsExe -NoProfile -ExecutionPolicy Bypass -File $targetScript @args
 exit $LASTEXITCODE
