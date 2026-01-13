@@ -31,12 +31,10 @@ pip install -r requirements.txt
 pwsh -NoProfile -ExecutionPolicy Bypass -File tools/make_shortcuts.ps1
 ```
 
-- 6つの即起動ショートカットも作る場合は `-IncludeQuickLaunch` を付けます。
-- 生成先: `%USERPROFILE%\OneDrive\デスクトップ\telegram-chat-platform 起動`
-- 生成物: `Launcher.lnk`（GUI起動）＋任意で即起動 6 つ
+- 生成先: デスクトップ直下（OneDrive リダイレクト環境でも `[Environment]::GetFolderPath('Desktop')` で解決）
+- 生成物: `Launcher.lnk`
 
-2. 以降は起動フォルダの `Launcher.lnk` をダブルクリックします。
-   - 即起動が必要な場合は `Tarot_Gemini` / `Tarot_OpenAI` / `Arisa_Gemini` / `Arisa_OpenAI` / `LINE_Gemini` / `LINE_OpenAI` を使います（`-AutoStart` 付き）。
+2. 以降はデスクトップの `Launcher.lnk` をダブルクリックし、Bot と LLM を選択して起動します。
 
 #### Launcher コマンド（単体実行）
 
@@ -118,7 +116,7 @@ PowerShell で **1コマンド** で Bot（aiogram）を起動する手順です
 ### ダブルクリック起動（ショートカット）
 
 - `tools/make_shortcuts.ps1` で生成した `Launcher.lnk` が唯一の起動入口です。
-- 即起動が必要な場合は `-IncludeQuickLaunch` で作った 6 つのショートカットを使います。
+- ダブルクリック後は Bot と LLM の 2 択メニューで選択します。
 
 > `.env` はデフォルト設定です。`DOTENV_FILE` を指定しない場合は `.env` を読み込みます。環境切替後は **必ずプロセスを再起動** してください。
 
@@ -528,11 +526,11 @@ powershell -ExecutionPolicy Bypass -File scripts/run_default.ps1
 
 ## Windows起動の切替確認（.envを触らずに6パターン）
 
-`.env` を上書きせずに `DOTENV_FILE` で切替できることを確認する手順です（`tools/make_shortcuts.ps1 -IncludeQuickLaunch` で生成したショートカットを使用）。起動中のプロセスは必ず停止してから次へ進めてください。
+`.env` を上書きせずに `DOTENV_FILE` で切替できることを確認する手順です。デスクトップの `Launcher.lnk` を使い、各組み合わせを都度選択して起動します。起動中のプロセスは必ず停止してから次へ進めてください。
 
-1. Tarot (OpenAI): `Tarot_OpenAI.lnk` をダブルクリック → 起動ログで `DOTENV_FILE=.env.openai` を確認。
-2. Tarot (Gemini): `Tarot_Gemini.lnk` をダブルクリック → 起動ログで `DOTENV_FILE=.env.gemini` を確認。
-3. Arisa (OpenAI): `Arisa_OpenAI.lnk` をダブルクリック → 起動ログで `DOTENV_FILE=.env.arisa.openai` を確認。
-4. Arisa (Gemini): `Arisa_Gemini.lnk` をダブルクリック → 起動ログで `DOTENV_FILE=.env.arisa.gemini` を確認。
-5. LINE (OpenAI): `LINE_OpenAI.lnk` をダブルクリック → 起動ログで `DOTENV_FILE=.env.openai` を確認。
-6. LINE (Gemini): `LINE_Gemini.lnk` をダブルクリック → 起動ログで `DOTENV_FILE=.env.gemini` を確認。
+1. Tarot (OpenAI): Launcher → Bot=tarot / LLM=openai を選択 → 起動ログで `DOTENV_FILE=.env.openai` を確認。
+2. Tarot (Gemini): Launcher → Bot=tarot / LLM=gemini を選択 → 起動ログで `DOTENV_FILE=.env.gemini` を確認。
+3. Arisa (OpenAI): Launcher → Bot=arisa / LLM=openai を選択 → 起動ログで `DOTENV_FILE=.env.arisa.openai` を確認。
+4. Arisa (Gemini): Launcher → Bot=arisa / LLM=gemini を選択 → 起動ログで `DOTENV_FILE=.env.arisa.gemini` を確認。
+5. LINE (OpenAI): Launcher → Bot=line / LLM=openai を選択 → 起動ログで `DOTENV_FILE=.env.openai` を確認。
+6. LINE (Gemini): Launcher → Bot=line / LLM=gemini を選択 → 起動ログで `DOTENV_FILE=.env.gemini` を確認。
