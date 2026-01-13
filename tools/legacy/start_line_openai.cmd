@@ -1,6 +1,9 @@
 @echo off
-set "REPO=%~dp0.."
+echo Deprecated: use tools\launcher.ps1 instead.
+setlocal EnableExtensions
+set "REPO=%~dp0..\.."
 for %%I in ("%REPO%") do set "REPO=%%~fI"
+cd /d "%REPO%"
 where pwsh >nul 2>nul && (set "PS=pwsh") || (set "PS=powershell")
 %PS% -NoProfile -ExecutionPolicy Bypass -File "%REPO%\tools\launcher.ps1" -App line -Provider openai -DotenvFile "%REPO%\.env.openai" -Port 8000 -AutoStart
 if errorlevel 1 (

@@ -7,7 +7,8 @@ param(
 
 Write-Warning "Deprecated: use tools/launcher.ps1 instead."
 
-$script = Join-Path $PSScriptRoot "launcher.ps1"
+$launcherRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+$script = Join-Path $launcherRoot "launcher.ps1"
 $args = @("-App", "line", "-Provider", $Provider, "-Port", $Port, "-AutoStart")
 if ($DotenvFile) {
     $args += @("-DotenvFile", $DotenvFile)
