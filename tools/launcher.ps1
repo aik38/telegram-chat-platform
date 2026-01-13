@@ -81,7 +81,7 @@ switch ($App) {
         }
     }
     "line" {
-        $targetScript = Join-Path $RepoRoot "tools\\start_line_stable.ps1"
+        $targetScript = Join-Path $RepoRoot "tools\\line_runtime.ps1"
         $args = @("-Provider", $Provider, "-Port", $Port)
         if ($ResolvedDotenv) {
             $args += @("-DotenvFile", $ResolvedDotenv)

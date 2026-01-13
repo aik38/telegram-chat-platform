@@ -23,34 +23,46 @@ pip install -r requirements.txt
 
 ## Windows quick start
 
-### Start (recommended)
+### 起動はこれだけ（recommended）
 
-- Launcher（推奨）: `tools/launcher.ps1` を 1 つの入口として使います。
-  - Tarot: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/launcher.ps1 -App tarot -Provider gemini`
-  - Arisa: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/launcher.ps1 -App arisa -Provider openai`
-  - LINE: `pwsh -NoProfile -ExecutionPolicy Bypass -File tools/launcher.ps1 -App line -Provider gemini -Port 8000`
-- Provider の切り替えは dotenv 名で行います。
+1. 初回のみ `tools/make_shortcuts.ps1` を実行します。
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File tools/make_shortcuts.ps1
+```
+
+- 6つの即起動ショートカットも作る場合は `-IncludeQuickLaunch` を付けます。
+- 生成先: `%USERPROFILE%\OneDrive\デスクトップ\telegram-chat-platform 起動`
+- 生成物: `Launcher.lnk`（GUI起動）＋任意で即起動 6 つ
+
+2. 以降は起動フォルダの `Launcher.lnk` をダブルクリックします。
+   - 即起動が必要な場合は `Tarot_Gemini` / `Tarot_OpenAI` / `Arisa_Gemini` / `Arisa_OpenAI` / `LINE_Gemini` / `LINE_OpenAI` を使います（`-AutoStart` 付き）。
+
+#### Launcher コマンド（単体実行）
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File tools/launcher.ps1 -App tarot -Provider gemini
+pwsh -NoProfile -ExecutionPolicy Bypass -File tools/launcher.ps1 -App arisa -Provider openai
+pwsh -NoProfile -ExecutionPolicy Bypass -File tools/launcher.ps1 -App line -Provider gemini -Port 8000 -AutoStart
+```
+
+- 対応: `App={tarot, arisa, line}` / `Provider={gemini, openai}` / `-AutoStart`
+- LINE は起動前に `8000/4040` の衝突を解消し、既存で正常稼働している場合は維持します。
+- Tarot / Arisa は **Telegram Bot**、LINE は **API サーバー** です（Bot と API は別プロセス）。
+- 旧 `start_*` スクリプトは `tools/legacy/` に移動しています（新規追加はしません）。
+- Provider 切替は `DOTENV_FILE` または `.env.*` で行います。
   - Tarot: `.env.gemini` / `.env.openai`
   - Arisa: `.env.arisa.gemini` / `.env.arisa.openai`
   - LINE: `.env.gemini` / `.env.openai`
+- 起動ログは `40_logs/` に保存されます。
+- **重要**: `.\\scripts\\*.ps1` は **リポジトリ直下での実行が前提** です。別ディレクトリから起動する場合は **絶対パス指定**を使ってください。
 
-- Tarot / Arisa は **Telegram Bot**、LINE は **API サーバー** です（Bot と API は別プロセス）。
-- Gemini / OpenAI の切り替えは `DOTENV_FILE` で行います（例: `.env.gemini` / `.env.openai` / `.env.arisa.gemini` / `.env.arisa.openai`）。`start_*` の cmd は互換ラッパーとして残しています。
-- LINE は既定で `8000` を使います（`LINE_PORT` / `API_PORT` / `-Port` で変更可能）。同時起動は想定しません。
-- ショートカットは `tools/make_shortcuts.ps1` で再生成してください。Desktop の「旧」フォルダに残っている旧ショートカットは誤起動の原因になるため使用しないでください。
-- 起動ショートカットは **サーバー/ボットを常駐起動するだけ** で、UI は出ません。
-  - LINE: `http://127.0.0.1:8000/docs` を開けることを確認。
-  - API: `http://127.0.0.1:8000/docs` を開けることを確認。
-  - Telegram: Bot にメッセージを送る or `scripts/doctor.ps1` で polling プロセス確認。
-  - 停止: **Ctrl+C**（正常稼働中はウィンドウを閉じない）。
-  - 起動ログは `40_logs/` に保存されます。
-- **重要**: `.\\scripts\\*.ps1` は **リポジトリ直下での実行が前提** です。別ディレクトリから起動する場合は **絶対パス指定**（例: `$repo=...; pwsh -File (Join-Path $repo 'scripts\\run_line.ps1') ...`）か、`tools` 配下のラッパー（`tools/start_line_openai.cmd` など）を使ってください。
+#### トラブル時の見方
 
-### Deprecated（互換ラッパー）
-
-- `start_*.cmd`: 互換のため残していますが `tools/launcher.ps1` に委譲します。
-- `tools/start_line.ps1`: 互換のため残していますが `tools/launcher.ps1` に委譲します。
-- `tools/start_line_gemini_stable.ps1`: 互換のため残していますが `tools/launcher.ps1` に委譲します。
+- Stop（プロジェクト停止）: 起動した PowerShell で **Ctrl+C**
+- Doctor: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/doctor.ps1`
+- Logs: `40_logs/`（stdout/stderr と `line_runtime_*.txt`）
+- ngrok URL: LINE 起動時のコンソール出力または `40_logs/ngrok_*_out.log`
 
 ## Troubleshooting（Windows）
 
@@ -63,7 +75,7 @@ pip install -r requirements.txt
 ### TelegramConflictError（同一トークンの多重 polling）
 
 - 同じ `TELEGRAM_BOT_TOKEN` で複数プロセスが `getUpdates` を実行すると `TelegramConflictError` が発生します。
-- `scripts/doctor.ps1` は `DOTENV_FILE=...` / `-DotenvFile ...` を含む python/ngrok プロセスから `.env` を読み取り、`TELEGRAM_BOT_TOKEN` の重複を検知すると exit 1 で停止します（`start_*` は検知時に起動を中断します）。
+- `scripts/doctor.ps1` は `DOTENV_FILE=...` / `-DotenvFile ...` を含む python/ngrok プロセスから `.env` を読み取り、`TELEGRAM_BOT_TOKEN` の重複を検知すると exit 1 で停止します（launcher 経由の起動も検知時に中断します）。
 
 ### Doctor の使い方
 
@@ -103,12 +115,10 @@ Python/ngrok processes with DOTENV_FILE:
 
 PowerShell で **1コマンド** で Bot（aiogram）を起動する手順です。API サーバー（Uvicorn）は別コマンドなので、Bot を動かしたい場合は以下のスクリプトを使ってください。
 
-### ダブルクリック起動（cmd）
+### ダブルクリック起動（ショートカット）
 
-- `start_openai.cmd` / `start_gemini.cmd`: `tools/launcher.ps1` に委譲し、Tarot を起動します。
-- `start_arisa_gemini.cmd` / `start_arisa_openai.cmd`: `tools/launcher.ps1` に委譲し、Arisa を起動します。
-- `start_line_gemini.cmd` / `start_line_openai.cmd`: `tools/launcher.ps1` に委譲し、LINE を起動します。
-- `tools/start_line_openai.cmd`: **任意の場所から実行可能**な LINE (OpenAI) 互換ラッパーです。
+- `tools/make_shortcuts.ps1` で生成した `Launcher.lnk` が唯一の起動入口です。
+- 即起動が必要な場合は `-IncludeQuickLaunch` で作った 6 つのショートカットを使います。
 
 > `.env` はデフォルト設定です。`DOTENV_FILE` を指定しない場合は `.env` を読み込みます。環境切替後は **必ずプロセスを再起動** してください。
 
@@ -518,11 +528,11 @@ powershell -ExecutionPolicy Bypass -File scripts/run_default.ps1
 
 ## Windows起動の切替確認（.envを触らずに6パターン）
 
-`.env` を上書きせずに `DOTENV_FILE` で切替できることを確認する手順です。起動中のプロセスは必ず停止してから次へ進めてください。
+`.env` を上書きせずに `DOTENV_FILE` で切替できることを確認する手順です（`tools/make_shortcuts.ps1 -IncludeQuickLaunch` で生成したショートカットを使用）。起動中のプロセスは必ず停止してから次へ進めてください。
 
-1. Tarot (OpenAI): `start_openai.cmd` をダブルクリック → 起動ログで `DOTENV_FILE=.env.openai` を確認。
-2. Tarot (Gemini): `start_gemini.cmd` をダブルクリック → 起動ログで `DOTENV_FILE=.env.gemini` を確認。
-3. Arisa (OpenAI): `start_arisa_openai.cmd` をダブルクリック → 起動ログで `DOTENV_FILE=.env.arisa.openai` を確認。
-4. Arisa (Gemini): `start_arisa_gemini.cmd` をダブルクリック → 起動ログで `DOTENV_FILE=.env.arisa.gemini` を確認。
-5. LINE (OpenAI): `start_line_openai.cmd` をダブルクリック → 起動ログで `DOTENV_FILE=.env.openai` を確認。
-6. LINE (Gemini): `start_line_gemini.cmd` をダブルクリック → 起動ログで `DOTENV_FILE=.env.gemini` を確認。
+1. Tarot (OpenAI): `Tarot_OpenAI.lnk` をダブルクリック → 起動ログで `DOTENV_FILE=.env.openai` を確認。
+2. Tarot (Gemini): `Tarot_Gemini.lnk` をダブルクリック → 起動ログで `DOTENV_FILE=.env.gemini` を確認。
+3. Arisa (OpenAI): `Arisa_OpenAI.lnk` をダブルクリック → 起動ログで `DOTENV_FILE=.env.arisa.openai` を確認。
+4. Arisa (Gemini): `Arisa_Gemini.lnk` をダブルクリック → 起動ログで `DOTENV_FILE=.env.arisa.gemini` を確認。
+5. LINE (OpenAI): `LINE_OpenAI.lnk` をダブルクリック → 起動ログで `DOTENV_FILE=.env.openai` を確認。
+6. LINE (Gemini): `LINE_Gemini.lnk` をダブルクリック → 起動ログで `DOTENV_FILE=.env.gemini` を確認。

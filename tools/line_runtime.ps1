@@ -121,6 +121,58 @@ function Wait-ForEndpoint {
     return $false
 }
 
+function Get-ListeningProcessIds {
+    param(
+        [int]$Port
+    )
+    $pids = @()
+    $netTcpCommand = Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue
+    if ($netTcpCommand) {
+        $pids = Get-NetTCPConnection -LocalPort $Port -State Listen `
+            | Select-Object -ExpandProperty OwningProcess -Unique
+        return $pids
+    }
+
+    $netstatLines = netstat -ano -p TCP | Select-String "LISTENING"
+    foreach ($line in $netstatLines) {
+        $parts = ($line -replace "\s+", " ").Trim().Split(" ")
+        if ($parts.Count -ge 5 -and $parts[1] -like "*:$Port") {
+            $pids += [int]$parts[4]
+        }
+    }
+    return $pids | Select-Object -Unique
+}
+
+function Resolve-PortConflict {
+    param(
+        [int]$Port,
+        [string]$HealthUrl,
+        [string]$Label
+    )
+    if ($HealthUrl) {
+        if (Wait-ForEndpoint -Url $HealthUrl -TimeoutSec 2) {
+            Write-Host "$Label already responding on port $Port. Keeping existing process."
+            return
+        }
+    }
+
+    $pids = @(Get-ListeningProcessIds -Port $Port)
+    if (-not $pids -or $pids.Count -eq 0) {
+        return
+    }
+
+    Write-Warning "$Label port $Port is in use. Stopping conflicting process(es): $($pids -join ', ')"
+    foreach ($pid in $pids) {
+        try {
+            Stop-Process -Id $pid -Force -ErrorAction Stop
+            Write-Host "Stopped PID $pid"
+        } catch {
+            Write-Warning "Failed to stop PID $pid: $($_.Exception.Message)"
+        }
+    }
+    Start-Sleep -Seconds 1
+}
+
 function Get-NgrokPublicUrl {
     param(
         [int]$Port
@@ -147,6 +199,9 @@ if ($DotenvPath) {
 }
 
 $env:LINE_PORT = $Port
+
+Resolve-PortConflict -Port $Port -HealthUrl "http://127.0.0.1:$Port/api/health" -Label "LINE API"
+Resolve-PortConflict -Port 4040 -HealthUrl "http://127.0.0.1:4040/api/tunnels" -Label "ngrok"
 
 $LogDir = Join-Path $RepoRoot "40_logs"
 if (-not (Test-Path -LiteralPath $LogDir)) {
