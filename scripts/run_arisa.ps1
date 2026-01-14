@@ -36,12 +36,9 @@ $env:DOTENV_FILE = $DotenvPath
 $env:CHARACTER = "arisa"
 Write-Host "Starting Arisa bot with DOTENV_FILE=$DotenvDisplay and CHARACTER=$env:CHARACTER"
 
-$DoctorPath = Join-Path $PSScriptRoot "doctor.ps1"
-$PsExe = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
-& $PsExe -NoProfile -ExecutionPolicy Bypass -File $DoctorPath -Mode Preflight
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Doctor checks failed. Fix the issues above and retry."
-    exit $LASTEXITCODE
+$PythonExe = Join-Path $RepoRoot ".venv\Scripts\python.exe"
+if (-not (Test-Path $PythonExe)) {
+    $PythonExe = "python"
 }
 
-& "$PSScriptRoot\windows_bootstrap.ps1" -DotenvFile $DotenvPath
+& $PythonExe -m bot.main

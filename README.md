@@ -25,165 +25,107 @@ pip install -r requirements.txt
 
 ### 起動はこれだけ（recommended）
 
-1. 初回のみ `tools/make_shortcuts.ps1` を実行します。
+1. リポジトリ直下の `StartBots.cmd` をダブルクリックします。
+2. メニューでアプリ（LINE / Tarot / Arisa）を選択します。
+3. LLM（openai / gemini）を選択し、単独で起動します（同時起動はしません）。
 
-```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File tools/make_shortcuts.ps1
-```
-
-- 生成先: デスクトップ直下（OneDrive リダイレクト環境でも `[Environment]::GetFolderPath('Desktop')` で解決）
-- 生成物: `Launcher.lnk`
-
-2. 以降はデスクトップの `Launcher.lnk` をダブルクリックし、Bot と LLM を選択して起動します。
-
-#### Launcher コマンド（単体実行）
-
-```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File tools/launcher.ps1 -App tarot -Provider gemini
-pwsh -NoProfile -ExecutionPolicy Bypass -File tools/launcher.ps1 -App arisa -Provider openai
-pwsh -NoProfile -ExecutionPolicy Bypass -File tools/launcher.ps1 -App line -Provider gemini -Port 8000 -AutoStart
-```
-
-- 対応: `App={tarot, arisa, line}` / `Provider={gemini, openai}` / `-AutoStart`
-- LINE は起動前に `8000/4040` の衝突を解消し、既存で正常稼働している場合は維持します。
-- Tarot / Arisa は **Telegram Bot**、LINE は **API サーバー** です（Bot と API は別プロセス）。
-- 旧 `start_*` スクリプトは `tools/legacy/` に移動しています（新規追加はしません）。
-- Provider 切替は `DOTENV_FILE` または `.env.*` で行います（優先順位: `-DotenvFile` 引数 > `DOTENV_FILE` 環境変数 > `.env.*` / `.env`）。
+- Provider 切替は `DOTENV_FILE` の切替だけで行います。
   - Tarot: `.env.gemini` / `.env.openai`
   - Arisa: `.env.arisa.gemini` / `.env.arisa.openai`
   - LINE: `.env.gemini` / `.env.openai`
-- 起動ログは `40_logs/` に保存されます。
-- Logs: `40_logs/`（`line_runtime_*.txt` と `line_api_*` / `ngrok_*` の stdout/stderr）
-- **重要**: `.\\scripts\\*.ps1` は **リポジトリ直下での実行が前提** です。別ディレクトリから起動する場合は **絶対パス指定**を使ってください。
+- Tarot / Arisa は **Telegram Bot**、LINE は **API サーバー** です（Bot と API は別プロセス）。
+- すべて **ポート 8000 単独起動** が前提です（同時起動しません）。
 
-#### トラブル時の見方
+### 手動起動（PowerShell）
 
-- Stop（プロジェクト停止）: 起動した PowerShell で **Ctrl+C**
-- Doctor: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/doctor.ps1`
-- Logs: `40_logs/`（stdout/stderr と `line_runtime_*.txt`）
-- ngrok URL: LINE 起動時のコンソール出力または `40_logs/ngrok_*_out.log`
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_tarot.ps1 -DotenvFile .env.openai
+powershell -ExecutionPolicy Bypass -File scripts/run_arisa.ps1 -DotenvFile .env.arisa.gemini
+powershell -ExecutionPolicy Bypass -File scripts/run_line.ps1 -DotenvFile .env.openai -Port 8000
+```
 
 ## Troubleshooting（Windows）
 
 ### WinError 10048（ポート衝突）
 
 - `uvicorn` 起動時に `WinError 10048` が出る場合、`8000` が既に使用中です。
-- `scripts/doctor.ps1` は `8000/4040` の待受プロセスを一覧し、PID / プロセス / コマンドラインを表示します。
-- 既に使用中であれば、該当プロセスを停止するか `LINE_PORT`（`API_PORT`）を変更してください。
+- 既に使用中であれば、該当プロセスを停止してから再起動してください。
 
 ### TelegramConflictError（同一トークンの多重 polling）
 
 - 同じ `TELEGRAM_BOT_TOKEN` で複数プロセスが `getUpdates` を実行すると `TelegramConflictError` が発生します。
-- `scripts/doctor.ps1` は `DOTENV_FILE=...` / `-DotenvFile ...` を含む python/ngrok プロセスから `.env` を読み取り、`TELEGRAM_BOT_TOKEN` の重複を検知すると exit 1 で停止します（launcher 経由の起動も検知時に中断します）。
-
-### Doctor の使い方
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/doctor.ps1
-```
-
-どの作業ディレクトリからでも実行できます（例: 絶対パス指定）。
-
-```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\telegram-chat-platform\scripts\doctor.ps1"
-```
-
-> 既定は Runtime チェック（`/api/health` と ngrok inspector を検証）です。起動前の確認だけにしたい場合は `-Mode Preflight` を指定してください。相対パスの `.env.*` はリポジトリ直下に解決され、トークンはマスクして表示されます。`-DotenvFile` を渡すと起動前のトークン衝突チェックも行えます。
+- 起動中の Bot を停止してから再起動してください（同時起動しません）。
 
 ### git stash の引用符（PowerShell）
 
 - `git stash drop stash@{0}` は PowerShell で誤解釈されることがあるため、**必ず引用符**で囲んでください。
   - 例: `git stash drop "stash@{0}"`
 
-**出力例（マスク済みトークン）**
-
-```text
-Doctor: repo root C:\work\telegram-chat-platform
-Mode: Runtime
-
-Listening ports (8000, 4040):
-  Port 8000: PID 1234 | python.exe | python -m uvicorn api.main:app --port 8000
-  Port 4040: PID 4567 | ngrok.exe | ngrok http 8000
-
-Python/ngrok processes with DOTENV_FILE:
-  PID 4321 | python.exe | DOTENV_FILE=C:\work\telegram-chat-platform\.env | TELEGRAM_BOT_TOKEN=1234...abcd
-    C:\Python\python.exe -m bot.main
-```
 
 ## Windows最短起動（Bot）
 
 PowerShell で **1コマンド** で Bot（aiogram）を起動する手順です。API サーバー（Uvicorn）は別コマンドなので、Bot を動かしたい場合は以下のスクリプトを使ってください。
 
-### ダブルクリック起動（ショートカット）
+### ダブルクリック起動（StartBots.cmd）
 
-- `tools/make_shortcuts.ps1` で生成した `Launcher.lnk` が唯一の起動入口です。
-- ダブルクリック後は Bot と LLM の 2 択メニューで選択します。
+- リポジトリ直下の `StartBots.cmd` が唯一の起動入口です。
+- ダブルクリック後は **アプリ選択 → LLM 選択 → 単独起動** の順で進みます。
 
-> `.env` はデフォルト設定です。`DOTENV_FILE` を指定しない場合は `.env` を読み込みます。環境切替後は **必ずプロセスを再起動** してください。
+> `DOTENV_FILE` を指定しない場合は `.env` を読み込みます。環境切替後は **必ずプロセスを再起動** してください。
 
 ### Arisa を動かす
 
-1. リポジトリ直下に `.env.arisa` を作成し、`TELEGRAM_BOT_TOKEN`, `OPENAI_API_KEY`, `SQLITE_DB_PATH`, `CHARACTER=arisa`, `PAYWALL_ENABLED` など必要な環境変数を設定します。
-   - QA用に管理者テストをする場合は `.env.arisa` に `ADMIN_USER_IDS=123456789,987654321` のようにカンマ区切りで Telegram のユーザーIDを指定します。
+1. リポジトリ直下に `.env.arisa.openai` もしくは `.env.arisa.gemini` を作成し、`TELEGRAM_BOT_TOKEN`, `OPENAI_API_KEY`, `SQLITE_DB_PATH`, `CHARACTER=arisa`, `PAYWALL_ENABLED` など必要な環境変数を設定します。
+   - QA用に管理者テストをする場合は `.env.arisa.*` に `ADMIN_USER_IDS=123456789,987654321` のようにカンマ区切りで Telegram のユーザーIDを指定します。
 2. PowerShell で以下を実行します。
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/run_arisa.ps1
+powershell -ExecutionPolicy Bypass -File scripts/run_arisa.ps1 -DotenvFile .env.arisa.gemini
 ```
 
-### Tarot（通常モード / .env）で起動する
+### Tarot（通常モード）で起動する
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/run_tarot.ps1
+powershell -ExecutionPolicy Bypass -File scripts/run_tarot.ps1 -DotenvFile .env.gemini
 ```
 
 ### LINE API サーバーを起動する
 
-**ワンクリック起動（推奨）**
-
-```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File tools/launcher.ps1 -App line -Provider gemini -DotenvFile .env.gemini -Port 8000
-```
-
-- 60〜90 秒以内に `http://127.0.0.1:8000/health` と `http://127.0.0.1:4040/api/tunnels` を確認します。
-- ngrok 経由の `https://<public_url>/health` も検証し、`LINE_CHANNEL_ACCESS_TOKEN` があれば Webhook URL 更新/テストも実施します。
-- 失敗時は `40_logs` の stdout/stderr の末尾を表示して終了します。
-
 **手動起動**
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/run_line.ps1
+powershell -ExecutionPolicy Bypass -File scripts/run_line.ps1 -DotenvFile .env.gemini -Port 8000
 ```
 
 **どこからでも起動（PowerShell 7 / 絶対パス）**
 
 ```powershell
 $repo = "C:\Users\OWNER\OneDrive\デスクトップ\telegram-chat-platform"
-pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo "scripts\run_line.ps1") -DotenvFile (Join-Path $repo ".env.openai")
+pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo "scripts\run_line.ps1") -DotenvFile (Join-Path $repo ".env.openai") -Port 8000
 ```
 
 絶対パスで実行する場合（カレント不問）:
 
 ```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\telegram-chat-platform\scripts\run_line.ps1" -DotenvFile "C:\path\to\telegram-chat-platform\.env.openai"
+pwsh -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\telegram-chat-platform\scripts\run_line.ps1" -DotenvFile "C:\path\to\telegram-chat-platform\.env.openai" -Port 8000
 ```
 
 ### 補足
 
-- 上記スクリプトは `.venv` の作成 → 依存導入 → dotenv 読み込み → Bot 起動までを実行します。
-- `DOTENV_FILE` が指定されている場合はそのファイルを読み込み、未指定の場合は `.env` を読み込みます。
+- 上記スクリプトは `DOTENV_FILE` を読み込み、Bot / API を起動します。
+- `.venv` があればその Python を優先して使います。
 - `.env` / `.env.*` は **コミット禁止** です（`.env.example` のみ追跡対象）。
 
 ### /start とボタンの簡易手動テスト（default / Arisa）
 
 1. 通常モード（default）
-   1. `scripts/run_default.ps1` で起動し、Telegram で `/start` を送信。
+   1. `scripts/run_tarot.ps1` で起動し、Telegram で `/start` を送信。
    2. 下段ボタンが「🎩占い」「💬相談」「🛒チャージ」「📊ステータス」「🌐 言語設定」になっていることを確認。
    3. 「🎩占い」「💬相談」をそれぞれタップし、各モードの案内が返ることを確認。
    4. 「🌐 言語設定」をタップし、3言語の選択肢が表示されることを確認。
 2. Arisa モード（CHARACTER=arisa）
    - Arisa の「💖恋愛」「🔥セクシー」開始文はランダムに切り替わります。また Store/Status はモードに関係なく常に利用できます。
-   1. `.env.arisa` を用意して `scripts/run_arisa.ps1` で起動し、Telegram で `/start` を送信。
+   1. `.env.arisa.gemini` を用意して `scripts/run_arisa.ps1` で起動し、Telegram で `/start` を送信。
    2. 上段ボタンが「💖恋愛」「🔥セクシー」に切り替わっていることを確認。
    3. 「💖恋愛」「🔥セクシー」をそれぞれタップし、Arisa 専用の促し文がランダムに返ることを確認。
    4. 「🛒チャージ」「📊ステータス」をタップし、どのモードでも Store/Status が開くことを確認。
@@ -196,23 +138,23 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\telegram-chat-platform
 
 ### Arisa コマンド制御の手動確認
 
-1. `.env.arisa` を用意して `scripts/run_arisa.ps1` を実行。
+1. `.env.arisa.gemini` を用意して `scripts/run_arisa.ps1` を実行。
 2. Telegram で `/start` を送信し、Arisa メニューが出ることを確認。
 3. `/help` `/lang` `/language` がそれぞれ案内/言語選択を返すことを確認。
 4. `/status` `/store` で Store/Status が表示されることを確認。
 5. `/read1` `/buy` など未許可コマンドがブロック文言で返ることを確認。
-6. `scripts/run_default.ps1` で起動し、default の `/start` `/read1` が従来通り動作することを確認。
+6. `scripts/run_tarot.ps1` で起動し、default の `/start` `/read1` が従来通り動作することを確認。
 
 ### Arisa 収益化 v2（Stars + トークン課金）の簡易確認
 
-1. `.env.arisa` に `CHARACTER=arisa`, `ONE_MESSAGE_TOKENS=600`, `TRIAL_FREE_CREDITS=10` を設定して起動。
+1. `.env.arisa.gemini` に `CHARACTER=arisa`, `ONE_MESSAGE_TOKENS=600`, `TRIAL_FREE_CREDITS=10` を設定して起動。
 2. 新規ユーザーで `/start` を送信し、初回10通の試用が付与されることを `/status` で確認。
 3. `/status` にチケット残・試用残・パス状態・Sexy解放が表示されることを確認。
 4. 「🔥セクシー」を押下し、未課金の場合はティーザー + `/store` 誘導になることを確認。
 5. 100⭐️購入で+15通、初回のみ追加+15通（合計30通相当）が付与されることを確認。
 6. 7日/30日パスを購入し、本日の残り回数が減ること・上限で止まることを確認。
 7. 言語を EN/PT に切り替えて `/store` `/status` が自然訳で表示されることを確認。
-8. `scripts/run_default.ps1` で起動し、占い/星の王子さまの文言や動作が変わらないことを確認。
+8. `scripts/run_tarot.ps1` で起動し、占い/星の王子さまの文言や動作が変わらないことを確認。
 
 ### 主な環境変数
 
@@ -259,21 +201,19 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\telegram-chat-platform
 - API 起動: `uvicorn api.main:app --reload --port 8000`
 - LINE Webhook（開発向け）:
   1. `.env` に `LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` / `LINE_ADMIN_USER_IDS` を設定。署名検証を暫定的に外す場合のみ `LINE_VERIFY_SIGNATURE=false` を追加。
-  2. `scripts/run_line.ps1` を起動（API → /health 確認 → ngrok の順で自動起動）。
-  3. 起動ログに表示される `Set LINE Webhook URL to: .../webhooks/line` を LINE Developers の Webhook URL に設定。検証ボタンで 200 OK が返ることを確認。
+  2. `scripts/run_line.ps1` を起動（API 起動 → `http://127.0.0.1:8000/health` を確認）。
+  3. 公開 URL を用意している場合は `.../webhooks/line` を LINE Developers の Webhook URL に設定し、検証ボタンで 200 OK が返ることを確認します。
   4. Messaging API > チャネル基本設定で Webhook を有効化し、チャネルアクセストークンを発行。
   5. 友だち追加後にメッセージを送ると、会話モードで「星の王子さま」人格が応答し、月間無料枠（デフォルト 30 回）を超えると上限メッセージを返します。
-  6. **ngrok Free プランでは起動ごとに URL が変わるため、毎回 Webhook URL を更新してください。**
 
 ### LINE開発の最短手順
 
 1. 必要な環境変数をセット：`LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` / `OPENAI_API_KEY`（必要に応じて `PRINCE_SYSTEM_PROMPT` や `LINE_ADMIN_USER_IDS`）。
-2. `scripts/run_line.ps1` を起動（API 起動 → /health 確認 → ngrok 起動）。
-3. 表示された `https://<ngrok-id>.ngrok.io/webhooks/line` を LINE Developers の Webhook URL に設定。
+2. `scripts/run_line.ps1` を起動し、`http://127.0.0.1:8000/health` を確認。
+3. 公開 URL を用意している場合は `.../webhooks/line` を LINE Developers の Webhook URL に設定。
 4. LINE から `/whoami` を送信し、返ってきた `userId` を `LINE_ADMIN_USER_IDS` に追記して API を再起動（管理者限定メニュー用）。
 5. 本番同等で署名検証を行う（デフォルト ON）。開発時のみ `LINE_VERIFY_SIGNATURE=false` を利用可能。
 6. 実機で 10 往復ほどメッセージを送り、「話す」（星の王子さま人格）と管理者限定の「今日の星」「ミニ占い」が期待通り返ることを確認。
-7. **ngrok Free プランでは起動ごとに URL が変わるため、毎回 Webhook URL を更新してください。**
 
 ### ログ出力
 
@@ -386,93 +326,10 @@ python -m pytest -q
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-### LINE Webhook ローカル検証ショートカット
+### LINE Webhook ローカル検証
 
-- `.env` の読み込み忘れ対策として、API 側も `python-dotenv` で自動ロードします（既存の環境変数は上書きしません）。
-- 開発時に system python と venv が混ざらないよう、PowerShell 用ショートカットを用意しています。
-  - `tools/run_line_api.ps1`: リポジトリ直下に移動して venv を有効化し、`uvicorn api.main:app --host 0.0.0.0 --port 8000` を起動。
-  - `tools/run_ngrok.ps1`: `ngrok http 8000` を実行（例: `.\tools\run_ngrok.ps1 -Port 8000`）。二重起動エラーを避けるため、既存 ngrok プロセスがないことを確認してから実行してください。
 - ローカルで LINE Webhook を叩くテスト: `python tools/test_line_webhook.py`
   - `.env` から `LINE_CHANNEL_SECRET` を読み、署名付きで `http://localhost:8000/webhooks/line` に POST します（環境変数 `LINE_WEBHOOK_URL` でURL上書き可）。
-  - 応答が `200` であれば、ngrok 経由でも同様に動作する想定です。
-# akolasia_tarot_bot 起動メモ
-
-## LINE公式アカウント起動手順（ローカル / Windows PowerShell）
-
-- 前提: リポジトリ直下で実行、PowerShell 7 推奨、`.venv` を利用。
-- 起動は 2 本立て: 1) API（uvicorn、ポート 8000） 2) ngrok（外部 URL → `localhost:8000` へ転送）。
-- すべてコピペで動くように、最短ワンライナーも併記しています。
-
-### 最短ワンライナー
-
-```powershell
-$repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-chat-platform"; cd $repo; .\.venv\Scripts\Activate.ps1; .\tools\run_line_api.ps1
-```
-
-別ウィンドウで ngrok:
-
-```powershell
-$repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-chat-platform"; cd $repo; .\tools\run_ngrok.ps1 -Port 8000
-```
-
-### 手順（詳細）
-
-1. API（uvicorn）起動（別ウィンドウ推奨）
-   ```powershell
-   $repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-chat-platform"; cd $repo; .\.venv\Scripts\Activate.ps1; .\tools\run_line_api.ps1
-   ```
-2. ngrok 起動（別ウィンドウ）
-   ```powershell
-   $repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-chat-platform"; cd $repo; .\tools\run_ngrok.ps1 -Port 8000
-   ```
-3. `/docs` が 200 になることを確認
-   ```powershell
-   $repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-chat-platform"; cd $repo; .\.venv\Scripts\Activate.ps1; (Invoke-WebRequest http://127.0.0.1:8000/docs -UseBasicParsing -TimeoutSec 5).StatusCode
-   ```
-4. tools の疎通テスト（任意）
-   ```powershell
-   $repo = Join-Path $env:USERPROFILE "OneDrive\デスクトップ\telegram-chat-platform"; cd $repo; .\.venv\Scripts\Activate.ps1; python .\tools\test_line_webhook.py
-   ```
-
-### 動作確認ポイント
-
-- `Invoke-WebRequest` の結果が `200`。
-- ngrok の Web UI: http://127.0.0.1:4040 でトンネルが見える。
-
-### LINE Developers 側設定（概念）
-
-- Webhook URL: `https://<ngrokドメイン>/webhooks/line`
-- Webhook を ON にする。
-- 「検証」や再送で、ngrok の inspect 画面に POST が到達することを確認。
-
-### よくある詰まりポイント
-
-- `No module named api` → リポジトリ直下で実行していない、または venv を有効化していない。
-- `run_ngrok.ps1 が認識されない` → リポジトリ直下で実行していない。
-- `ERR_NGROK_334` → 同じエンドポイントの ngrok が既に起動中。既存 ngrok を停止してから再実行。
-- 接続拒否 → uvicorn が起動していない、またはポート指定が間違っている。
-
-## セットアップ
-cd "%USERPROFILE%\OneDrive\デスクトップ\telegram-chat-platform"
-.\.venv\Scripts\Activate
-pip install -r requirements.txt
-
-## 起動
-cd "%USERPROFILE%\OneDrive\デスクトップ\telegram-chat-platform"
-.\.venv\Scripts\Activate
-python -m bot.main
-
-###　Codexで修正後のプル・プッシュ
-
-cd "$env:USERPROFILE\OneDrive\デスクトップ\telegram-chat-platform"; `
-git pull --rebase origin main; `
-git add .; `
-git commit -m "Update tarot bot from local"; `
-git push origin main
-
-ngrokを起動（すでにOKならそのまま）
-ngrok http 8000
-ブラウザで http://127.0.0.1:4040 を開く
 
 ## Dev routine (daily)
 1) Run `tools/sync.ps1` (= telegram sync): `git pull --rebase` → `.venv\Scripts\python.exe -m pytest -q` → 変更があれば commit/push（junk だけなら commit しない）。
@@ -501,19 +358,19 @@ PowerShell でリポジトリ直下にて実行します。
 
 ```powershell
 $env:DOTENV_FILE = ".env.gemini"
-powershell -ExecutionPolicy Bypass -File scripts/run_default.ps1
+powershell -ExecutionPolicy Bypass -File scripts/run_tarot.ps1
 ````
 
-その後、Windows 側の起動ショートカット（ダブルクリック）で起動してください。
+その後、Windows 側の `StartBots.cmd` から起動してください。
 
 ### OpenAIに戻す日
 
 ```powershell
 $env:DOTENV_FILE = ".env.openai"
-powershell -ExecutionPolicy Bypass -File scripts/run_default.ps1
+powershell -ExecutionPolicy Bypass -File scripts/run_tarot.ps1
 ```
 
-その後、Windows 側の起動ショートカット（ダブルクリック）で起動してください。
+その後、Windows 側の `StartBots.cmd` から起動してください。
 
 注意:
 
@@ -529,11 +386,11 @@ powershell -ExecutionPolicy Bypass -File scripts/run_default.ps1
 
 ## Windows起動の切替確認（.envを触らずに6パターン）
 
-`.env` を上書きせずに `DOTENV_FILE` で切替できることを確認する手順です。デスクトップの `Launcher.lnk` を使い、各組み合わせを都度選択して起動します。起動中のプロセスは必ず停止してから次へ進めてください。
+`.env` を上書きせずに `DOTENV_FILE` で切替できることを確認する手順です。`StartBots.cmd` を使い、各組み合わせを都度選択して起動します。起動中のプロセスは必ず停止してから次へ進めてください。
 
-1. Tarot (OpenAI): Launcher → Bot=tarot / LLM=openai を選択 → 起動ログで `DOTENV_FILE=.env.openai` を確認。
-2. Tarot (Gemini): Launcher → Bot=tarot / LLM=gemini を選択 → 起動ログで `DOTENV_FILE=.env.gemini` を確認。
-3. Arisa (OpenAI): Launcher → Bot=arisa / LLM=openai を選択 → 起動ログで `DOTENV_FILE=.env.arisa.openai` を確認。
-4. Arisa (Gemini): Launcher → Bot=arisa / LLM=gemini を選択 → 起動ログで `DOTENV_FILE=.env.arisa.gemini` を確認。
-5. LINE (OpenAI): Launcher → Bot=line / LLM=openai を選択 → 起動ログで `DOTENV_FILE=.env.openai` を確認。
-6. LINE (Gemini): Launcher → Bot=line / LLM=gemini を選択 → 起動ログで `DOTENV_FILE=.env.gemini` を確認。
+1. Tarot (OpenAI): StartBots.cmd → Bot=tarot / LLM=openai を選択 → 起動ログで `DOTENV_FILE=.env.openai` を確認。
+2. Tarot (Gemini): StartBots.cmd → Bot=tarot / LLM=gemini を選択 → 起動ログで `DOTENV_FILE=.env.gemini` を確認。
+3. Arisa (OpenAI): StartBots.cmd → Bot=arisa / LLM=openai を選択 → 起動ログで `DOTENV_FILE=.env.arisa.openai` を確認。
+4. Arisa (Gemini): StartBots.cmd → Bot=arisa / LLM=gemini を選択 → 起動ログで `DOTENV_FILE=.env.arisa.gemini` を確認。
+5. LINE (OpenAI): StartBots.cmd → Bot=line / LLM=openai を選択 → 起動ログで `DOTENV_FILE=.env.openai` を確認。
+6. LINE (Gemini): StartBots.cmd → Bot=line / LLM=gemini を選択 → 起動ログで `DOTENV_FILE=.env.gemini` を確認。
