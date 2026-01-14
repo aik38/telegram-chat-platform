@@ -394,3 +394,29 @@ powershell -ExecutionPolicy Bypass -File scripts/run_tarot.ps1
 4. Arisa (Gemini): StartBots.cmd → Bot=arisa / LLM=gemini を選択 → 起動ログで `DOTENV_FILE=.env.arisa.gemini` を確認。
 5. LINE (OpenAI): StartBots.cmd → Bot=line / LLM=openai を選択 → 起動ログで `DOTENV_FILE=.env.openai` を確認。
 6. LINE (Gemini): StartBots.cmd → Bot=line / LLM=gemini を選択 → 起動ログで `DOTENV_FILE=.env.gemini` を確認。
+
+## GitHubでmainにマージ後、ローカルへ反映する（Windows / PowerShell）
+
+ローカルPCへ確実に反映するための PowerShell コマンド例です。PowerShell では行継続に `^` は使いません（cmd専用）。1行で書くか、必要ならバッククォート `` ` `` を使ってください。
+
+### A) 更新だけ（安全・最短）
+
+```powershell
+cd "$env:USERPROFILE\OneDrive\デスクトップ\telegram-chat-platform"
+git pull --rebase origin main
+```
+
+### B) 更新 + 簡易チェック（compileall）
+
+> `compileall` は **リポジトリ全体 "." を対象にしない** でください（`.git` を踏んで壊れるため）。対象ディレクトリを限定します。
+
+```powershell
+cd "$env:USERPROFILE\OneDrive\デスクトップ\telegram-chat-platform"
+git pull --rebase origin main
+.\.venv\Scripts\Activate.ps1
+python -m compileall -q api bot core characters scripts tools
+```
+
+### 実行後の起動
+
+- 起動は `StartBots.cmd` を使ってください（既存の `scripts/run_*.ps1` の案内がある場合はそちらに従ってください）。
