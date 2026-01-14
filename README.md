@@ -18,8 +18,9 @@ Telegram向けに再利用可能な汎用チャットボットプラットフォ
 pip install -r requirements.txt
 ```
 
-- 日常運用は PowerShell で `tools/sync.ps1`（ショートカット名: “telegram sync”）を実行する想定です。内部で `git pull --rebase` → `.venv\Scripts\python.exe -m pytest -q` → 変更があれば commit/push の順で回します。
+- 日常運用は PowerShell で `tools/sync.ps1` を実行する想定です。内部で `git pull --rebase` → `.venv\Scripts\python.exe -m pytest -q` → 変更があれば commit/push の順で回します。
   - Windows 由来の junk（Desktop.ini など）だけが差分の場合は commit をスキップします（PR #47 実装）。
+- デスクトップショートカット（Update+Start など）運用は廃止し、起動は `StartBots.cmd` に一本化しています。
 
 ## Windows quick start
 
@@ -43,6 +44,11 @@ powershell -ExecutionPolicy Bypass -File scripts/run_tarot.ps1 -DotenvFile .env.
 powershell -ExecutionPolicy Bypass -File scripts/run_arisa.ps1 -DotenvFile .env.arisa.gemini
 powershell -ExecutionPolicy Bypass -File scripts/run_line.ps1 -DotenvFile .env.openai -Port 8000
 ```
+
+### scripts/ と tools/ の役割
+
+- `scripts/`: 起動エントリや運用スクリプト（PowerShell）。
+- `tools/`: 補助ユーティリティ（Python/PowerShell）。
 
 ## Troubleshooting（Windows）
 
@@ -414,9 +420,10 @@ git pull --rebase origin main
 cd "$env:USERPROFILE\OneDrive\デスクトップ\telegram-chat-platform"
 git pull --rebase origin main
 .\.venv\Scripts\Activate.ps1
-python -m compileall -q api bot core characters scripts tools
+python -m compileall -q api bot core characters tools
 ```
 
 ### 実行後の起動
 
 - 起動は `StartBots.cmd` を使ってください（既存の `scripts/run_*.ps1` の案内がある場合はそちらに従ってください）。
+- `scripts/` は PowerShell のみなので `compileall` の対象外です。
