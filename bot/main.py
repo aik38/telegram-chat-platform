@@ -1608,12 +1608,16 @@ async def call_openai_with_retry(
         request_kwargs.update(request_overrides)
     provider = LLM_PROVIDER or infer_provider(get_openai_base_url())
     request_kwargs = build_chat_kwargs(provider, request_kwargs)
+    unknown_param_retry = False
 
     for attempt in range(1, max_attempts + 1):
         try:
+            send_kwargs = (
+                build_chat_kwargs(provider, request_kwargs) if provider == "gemini" else request_kwargs
+            )
             completion = await asyncio.get_running_loop().run_in_executor(
                 None,
-                lambda: client.chat.completions.create(**request_kwargs),
+                lambda: client.chat.completions.create(**send_kwargs),
             )
             answer = extract_completion_content_or_fallback(
                 completion,
@@ -1626,7 +1630,18 @@ async def call_openai_with_retry(
                 fallback_update_id=fallback_update_id,
             )
             return postprocess_llm_text(answer, lang=lang_code), False
-        except (AuthenticationError, PermissionDeniedError, BadRequestError) as exc:
+        except BadRequestError as exc:
+            if provider == "gemini" and not unknown_param_retry and _is_unknown_param_error(exc):
+                logger.warning("Gemini rejected parameter; retrying with sanitized kwargs.")
+                unknown_param_retry = True
+                request_kwargs = build_chat_kwargs(provider, request_kwargs)
+                continue
+            logger.exception("Fatal OpenAI error: %s", exc)
+            return (
+                t(lang_code, "OPENAI_FATAL_ERROR"),
+                True,
+            )
+        except (AuthenticationError, PermissionDeniedError) as exc:
             logger.exception("Fatal OpenAI error: %s", exc)
             return (
                 t(lang_code, "OPENAI_FATAL_ERROR"),
@@ -1690,12 +1705,16 @@ async def call_openai_with_retry_and_usage(
         request_kwargs.update(request_overrides)
     provider = LLM_PROVIDER or infer_provider(get_openai_base_url())
     request_kwargs = build_chat_kwargs(provider, request_kwargs)
+    unknown_param_retry = False
 
     for attempt in range(1, max_attempts + 1):
         try:
+            send_kwargs = (
+                build_chat_kwargs(provider, request_kwargs) if provider == "gemini" else request_kwargs
+            )
             completion = await asyncio.get_running_loop().run_in_executor(
                 None,
-                lambda: client.chat.completions.create(**request_kwargs),
+                lambda: client.chat.completions.create(**send_kwargs),
             )
             answer = extract_completion_content_or_fallback(
                 completion,
@@ -1710,7 +1729,19 @@ async def call_openai_with_retry_and_usage(
             usage = getattr(completion, "usage", None)
             total_tokens = getattr(usage, "total_tokens", None) if usage else None
             return postprocess_llm_text(answer, lang=lang_code), False, total_tokens
-        except (AuthenticationError, PermissionDeniedError, BadRequestError) as exc:
+        except BadRequestError as exc:
+            if provider == "gemini" and not unknown_param_retry and _is_unknown_param_error(exc):
+                logger.warning("Gemini rejected parameter; retrying with sanitized kwargs.")
+                unknown_param_retry = True
+                request_kwargs = build_chat_kwargs(provider, request_kwargs)
+                continue
+            logger.exception("Fatal OpenAI error: %s", exc)
+            return (
+                t(lang_code, "OPENAI_FATAL_ERROR"),
+                True,
+                None,
+            )
+        except (AuthenticationError, PermissionDeniedError) as exc:
             logger.exception("Fatal OpenAI error: %s", exc)
             return (
                 t(lang_code, "OPENAI_FATAL_ERROR"),
@@ -1756,6 +1787,11 @@ def _preview_text(text: str, limit: int = 80) -> str:
     if len(text) <= limit:
         return text
     return text[:limit] + "..."
+
+
+def _is_unknown_param_error(exc: Exception) -> bool:
+    message = str(exc)
+    return "Unknown name" in message or "unknown name" in message
 
 
 def build_lang_keyboard(lang: str | None = "ja") -> InlineKeyboardMarkup:

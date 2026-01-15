@@ -18,6 +18,7 @@ from openai import (
 
 from core.env_utils import infer_provider, load_environment, validate_model_base_url
 from core.llm_client import get_openai_base_url, make_openai_client
+from core.llm_params import build_chat_kwargs
 
 DEFAULT_SYSTEM_PROMPT = """あなたは「星の王子さま」の価値観を大切にする語り手です。
 - 原作の長文引用や台詞の丸写しは避け、エッセンスや心の動きを短く伝えてください。
@@ -92,14 +93,22 @@ class PrinceChatService:
         if not self.client:
             raise RuntimeError("OpenAI client is not configured (missing OPENAI_API_KEY)")
 
+        provider = infer_provider(get_openai_base_url())
+        request_kwargs = build_chat_kwargs(
+            provider,
+            {
+                "model": self.model,
+                "messages": list(messages),
+                "temperature": 0.8,
+            },
+        )
+
         for attempt in range(1, max_attempts + 1):
             try:
                 completion = await asyncio.get_running_loop().run_in_executor(
                     None,
                     lambda: self.client.chat.completions.create(
-                        model=self.model,
-                        messages=list(messages),
-                        temperature=0.8,
+                        **request_kwargs,
                     ),
                 )
                 return (completion.choices[0].message.content or "").strip()
