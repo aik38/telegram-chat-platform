@@ -1,4 +1,5 @@
 import asyncio
+import difflib
 import json
 import logging
 import math
@@ -256,11 +257,12 @@ TAROT_THEME: dict[int, str] = {}
 USER_STATE_LAST_ACTIVE: dict[int, datetime] = {}
 ARISA_START_VARIANTS: dict[int, str] = {}
 ARISA_BASE_NEED_TYPE: dict[int, str] = {}
-DEFAULT_ARISA_NEED_TYPE = "calm"
+DEFAULT_ARISA_NEED_TYPE = "unknown"
 ARISA_NEED_TYPE_TEMPERATURE = {
     "calm": 0.4,
     "clarify": 0.6,
     "tease": 0.9,
+    "unknown": 0.4,
 }
 DEFAULT_THEME = "life"
 
@@ -1435,6 +1437,71 @@ def build_arisa_messages(
     ]
 
 
+def _extract_choice_content(choice: Any) -> str | None:
+    message = getattr(choice, "message", None)
+    if message:
+        content = getattr(message, "content", None)
+        if content:
+            return content
+        if isinstance(message, dict):
+            content = message.get("content")
+            if content:
+                return content
+    if isinstance(choice, dict):
+        message = choice.get("message")
+        if isinstance(message, dict):
+            content = message.get("content")
+            if content:
+                return content
+        content = choice.get("content")
+        if content:
+            return content
+        delta = choice.get("delta")
+        if isinstance(delta, dict):
+            content = delta.get("content")
+            if content:
+                return content
+    text = getattr(choice, "text", None)
+    if text:
+        return text
+    delta = getattr(choice, "delta", None)
+    if delta:
+        content = getattr(delta, "content", None)
+        if content:
+            return content
+        if isinstance(delta, dict):
+            content = delta.get("content")
+            if content:
+                return content
+    return None
+
+
+def _extract_completion_content(completion: Any) -> str | None:
+    if completion is None:
+        return None
+    choices = getattr(completion, "choices", None)
+    if choices:
+        content = _extract_choice_content(choices[0])
+        if content:
+            return content
+    payload = completion
+    if hasattr(completion, "model_dump"):
+        payload = completion.model_dump()
+    if isinstance(payload, dict):
+        choices = payload.get("choices")
+        if isinstance(choices, list) and choices:
+            return _extract_choice_content(choices[0])
+    return None
+
+
+def extract_completion_content_or_fallback(completion: Any, *, lang: str | None = "ja") -> str:
+    content = _extract_completion_content(completion)
+    if content is None or not str(content).strip():
+        logger.warning("LLM completion content missing; using fallback")
+        return t(normalize_lang(lang), "OPENAI_CONTENT_FALLBACK")
+    return str(content)
+
+
 async def call_openai_with_retry(
     messages: Iterable[dict[str, str]], *, lang: str | None = "ja", temperature: float | None = None
 ) -> tuple[str, bool]:
@@ -1452,7 +1519,7 @@ async def call_openai_with_retry(
                 None,
                 lambda: client.chat.completions.create(**request_kwargs),
             )
-            answer = completion.choices[0].message.content
+            answer = extract_completion_content_or_fallback(completion, lang=lang_code)
             return postprocess_llm_text(answer, lang=lang_code), False
         except (AuthenticationError, PermissionDeniedError, BadRequestError) as exc:
             logger.exception("Fatal OpenAI error: %s", exc)
@@ -1511,7 +1578,7 @@ async def call_openai_with_retry_and_usage(
                 None,
                 lambda: client.chat.completions.create(**request_kwargs),
             )
-            answer = completion.choices[0].message.content
+            answer = extract_completion_content_or_fallback(completion, lang=lang_code)
             usage = getattr(completion, "usage", None)
             total_tokens = getattr(usage, "total_tokens", None) if usage else None
             return postprocess_llm_text(answer, lang=lang_code), False, total_tokens
@@ -4335,19 +4402,53 @@ def _is_arisa_tarot_trigger(text: str) -> bool:
     return any(keyword in lowered for keyword in ARISA_TAROT_KEYWORDS)
 
 
+_NEED_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "calm": ("安心", "あんしん", "安心感", "安らぎ"),
+    "tease": ("刺激", "しげき", "スリル"),
+    "clarify": ("整理", "せいり", "整頓"),
+}
+
+
+def _normalize_need_text(text: str) -> str:
+    return unicodedata.normalize("NFKC", text).lower()
+
+
+def _find_keyword_index(text: str, keyword: str) -> int | None:
+    index = text.find(keyword)
+    if index >= 0:
+        return index
+    keyword_len = len(keyword)
+    if keyword_len == 0 or not text:
+        return None
+    lengths = {keyword_len}
+    if keyword_len > 1:
+        lengths.add(keyword_len - 1)
+    lengths.add(keyword_len + 1)
+    for size in sorted(lengths):
+        if size <= 0 or size > len(text):
+            continue
+        for start in range(0, len(text) - size + 1):
+            segment = text[start : start + size]
+            ratio = difflib.SequenceMatcher(None, segment, keyword).ratio()
+            if ratio >= 0.8:
+                return start
+    return None
+
+
 def classify_need(text: str) -> str | None:
     if not text:
         return None
-    candidates = [
-        ("安心", "calm"),
-        ("刺激", "tease"),
-        ("整理", "clarify"),
-    ]
+    normalized = _normalize_need_text(text)
     hits: list[tuple[int, str]] = []
-    for keyword, need_type in candidates:
-        index = text.find(keyword)
-        if index >= 0:
-            hits.append((index, need_type))
+    for need_type, keywords in _NEED_KEYWORDS.items():
+        best_index: int | None = None
+        for keyword in keywords:
+            normalized_keyword = _normalize_need_text(keyword)
+            index = _find_keyword_index(normalized, normalized_keyword)
+            if index is not None and (best_index is None or index < best_index):
+                best_index = index
+        if best_index is not None:
+            hits.append((best_index, need_type))
     if not hits:
         return None
     hits.sort(key=lambda item: item[0])
@@ -4363,16 +4464,18 @@ def resolve_arisa_need_type(base_need_type: str | None, user_text: str) -> str:
     return DEFAULT_ARISA_NEED_TYPE
 
 
-def get_user_calling(*, paid: bool, name: str | None) -> str:
-    if paid and name:
-        cleaned = name.strip()
+def get_user_calling(*, paid: bool, known_name: str | None) -> str:
+    if paid and known_name:
+        cleaned = known_name.strip()
         if cleaned:
             return f"{cleaned}さん"
     return "あなた"
 
 
 def arisa_temperature_for_need(need_type: str) -> float:
-    return ARISA_NEED_TYPE_TEMPERATURE.get(need_type, ARISA_NEED_TYPE_TEMPERATURE[DEFAULT_ARISA_NEED_TYPE])
+    return ARISA_NEED_TYPE_TEMPERATURE.get(
+        need_type, ARISA_NEED_TYPE_TEMPERATURE[DEFAULT_ARISA_NEED_TYPE]
+    )
 
 
 def _arisa_block_notice(lang: str | None = "ja") -> str:
@@ -4432,7 +4535,7 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
     paid_user = is_arisa_paid_user(user_id, user=user, now=now)
     base_need_type = ARISA_BASE_NEED_TYPE.get(user_id)
     need_type = resolve_arisa_need_type(base_need_type, user_query)
-    calling = get_user_calling(paid=paid_user, name=None)
+    calling = get_user_calling(paid=paid_user, known_name=None)
     temperature = arisa_temperature_for_need(need_type)
 
     logger.info(
@@ -4853,7 +4956,7 @@ async def arisa_text(message: Message) -> None:
 
     if action == "love":
         if user_id is not None:
-            ARISA_BASE_NEED_TYPE[user_id] = DEFAULT_ARISA_NEED_TYPE
+            ARISA_BASE_NEED_TYPE[user_id] = "calm"
         await message.answer(
             get_arisa_prompt("ARISA_LOVE_PROMPTS", "ARISA_LOVE_PROMPT", lang=lang),
             reply_markup=build_arisa_menu(user_id),
