@@ -1,5 +1,4 @@
 import asyncio
-import difflib
 import json
 import logging
 import math
@@ -48,6 +47,7 @@ from openai import (
 from core.config import AppConfig, load_config
 from core.env_utils import infer_provider, mask_secret, validate_model_base_url
 from core.llm_client import get_openai_base_url, make_openai_client
+from core.llm_params import build_chat_kwargs
 from core.db import (
     TicketColumn,
     UserRecord,
@@ -92,7 +92,6 @@ from core.monetization import (
 )
 from core.logging import request_id_var, setup_logging
 from core.prompts import (
-    get_character_boundary_lines,
     get_consult_system_prompt,
     get_tarot_fixed_output_format,
     get_tarot_output_rules,
@@ -115,6 +114,14 @@ from core.tarot import (
 from core.tarot.spreads import Spread
 from core.store.catalog import Product, get_product, iter_products
 
+from bot.arisa_runtime import (
+    DEFAULT_ARISA_NEED_TYPE,
+    arisa_generation_params,
+    build_arisa_messages,
+    get_arisa_fallback_message,
+    get_user_calling,
+    resolve_arisa_need_type,
+)
 from bot.texts.ja import HELP_TEXT_TEMPLATE
 
 bot: Bot | None = None
@@ -308,31 +315,6 @@ TAROT_THEME: dict[int, str] = {}
 USER_STATE_LAST_ACTIVE: dict[int, datetime] = {}
 ARISA_START_VARIANTS: dict[int, str] = {}
 ARISA_BASE_NEED_TYPE: dict[int, str] = {}
-DEFAULT_ARISA_NEED_TYPE = "unknown"
-ARISA_NEED_TYPE_TEMPERATURE = {
-    "calm": 0.68,
-    "clarify": 0.55,
-    "tease": 0.95,
-    "unknown": 0.68,
-}
-ARISA_NEED_TYPE_TOP_P = {
-    "calm": 0.9,
-    "clarify": 0.85,
-    "tease": 0.95,
-    "unknown": 0.9,
-}
-ARISA_NEED_TYPE_PRESENCE = {
-    "calm": 0.2,
-    "clarify": 0.1,
-    "tease": 0.35,
-    "unknown": 0.2,
-}
-ARISA_NEED_TYPE_FREQUENCY = {
-    "calm": 0.15,
-    "clarify": 0.1,
-    "tease": 0.25,
-    "unknown": 0.15,
-}
 DEFAULT_THEME = "life"
 
 TAROT_THEME_LABELS: dict[str, str] = {
@@ -1477,45 +1459,6 @@ def build_general_chat_messages(user_query: str, *, lang: str | None = "ja") -> 
     ]
 
 
-def _arisa_tone_prompt(lang: str) -> str:
-    if lang == "en":
-        return "Keep replies short, affectionate, close in distance, and refined."
-    if lang == "pt":
-        return "Responda de forma curta, carinhosa, próxima e elegante."
-    return "短く、甘えた距離感で、上品に返すこと。"
-
-
-def build_arisa_messages(
-    user_query: str,
-    *,
-    lang: str | None = "ja",
-    paid: bool = False,
-    first_paid_turn: bool = False,
-    need_type: str = DEFAULT_ARISA_NEED_TYPE,
-    calling: str = "あなた",
-) -> list[dict[str, str]]:
-    """Arisaモードの system prompt を組み立てる。"""
-    lang_code = normalize_lang(lang)
-    system_prompt = get_consult_system_prompt(lang_code)
-    boundary_lines = get_character_boundary_lines()
-    internal_flags = (
-        f'MODE: "{ "PAID" if paid else "FREE" }"\n'
-        f'FIRST_PAID_TURN: "{ "true" if first_paid_turn else "false" }"\n'
-        f'LANG: "{lang_code}"\n'
-        f'NEED_TYPE: "{need_type}"\n'
-        f'CALLING: "{calling}"'
-    )
-    parts = [system_prompt]
-    if boundary_lines:
-        parts.append(boundary_lines.strip())
-    parts.append(_arisa_tone_prompt(lang_code))
-    parts.append(internal_flags)
-    return [
-        {"role": "system", "content": "\n\n".join(parts)},
-        {"role": "user", "content": user_query},
-    ]
-
-
 def _coerce_llm_text(content: Any) -> str | None:
     if content is None:
         return None
@@ -1612,91 +1555,6 @@ def _extract_completion_content(completion: Any) -> str | None:
     return None
 
 
-def _arisa_fallback_variants(lang: str) -> dict[str, tuple[str, ...]]:
-    if lang == "en":
-        return {
-            "calm": (
-                "…Sorry, my words tangled for a second. Are you okay right now?",
-                "…Hold on. I want to be gentle with you. What’s the one thing you want me to say first?",
-                "…I stumbled a bit. Tell me what you want most from me right now.",
-            ),
-            "clarify": (
-                "…Let me reset. What’s the one point you want me to untangle first?",
-                "…I got caught in my thoughts. What detail matters most to you right now?",
-                "…Give me one line—what feels most confusing at the moment?",
-            ),
-            "tease": (
-                "…Hehe, I got a little carried away. What mood should I lean into?",
-                "…Oops, I teased too much. Tell me your vibe in one word.",
-                "…I went quiet on purpose. Now, what do you want me to do with you—just for now?",
-            ),
-            "unknown": (
-                "…Sorry, my words got twisted. What do you want to feel right now?",
-                "…I want to stay close to you. What’s the one thing you want from me?",
-                "…Let me try again. What’s on your mind most right now?",
-            ),
-        }
-    if lang == "pt":
-        return {
-            "calm": (
-                "…Desculpa, minhas palavras se embolaram. Você tá bem agora?",
-                "…Espera. Quero cuidar de você direitinho. O que você quer ouvir primeiro?",
-                "…Eu tropecei um pouco. Me diz o que você quer mais de mim agora.",
-            ),
-            "clarify": (
-                "…Deixa eu reiniciar. Qual ponto você quer organizar primeiro?",
-                "…Me perdi um pouco. Qual detalhe importa mais agora?",
-                "…Me dá uma linha: o que tá mais confuso neste momento?",
-            ),
-            "tease": (
-                "…Hehe, me empolguei. Em que clima você quer que eu entre?",
-                "…Ops, provoquei demais. Diz tua vibe em uma palavra.",
-                "…Fiquei quieta de propósito. Agora me diz: o que você quer de mim, só por agora?",
-            ),
-            "unknown": (
-                "…Desculpa, minhas palavras travaram. O que você quer sentir agora?",
-                "…Quero ficar bem pertinho. O que você quer de mim agora?",
-                "…Vamos de novo. O que tá mais forte na sua cabeça agora?",
-            ),
-        }
-    return {
-        "calm": (
-            "…ごめん、言葉が絡まった。あなた、今いちばん欲しいのは何？",
-            "…うまく言えなかった。あなた、今いちばん欲しい言葉を教えて？",
-            "…いまは落ち着いて受け止めたい。あなたがいちばん欲しい言葉、教えて？",
-        ),
-        "clarify": (
-            "…ごめん、頭の中が渋滞した。いま一番ひっかかってる点はどこ？",
-            "…いったん深呼吸。いま一番ひっかかってる点、ひと言で教えて？",
-            "…私が整えるね。いちばん気になる部分はどこ？",
-        ),
-        "tease": (
-            "…ふふ、ちょっと焦らしすぎた。あなた、いまの気分を一言で教えて？",
-            "…ごめんね、空気に酔った。あなたは今、どんな温度がほしい？",
-            "…黙ったの、わざと。あなた、今どんなムード？",
-        ),
-        "unknown": (
-            "…ごめん、言葉がうまく出ない。あなた、いまいちばん欲しいのは何？",
-            "…今はちゃんと寄り添いたい。あなた、今の気分を一言で教えて？",
-            "…言い直すね。あなた、今いちばん気になってることって何？",
-        ),
-    }
-
-
-def _arisa_fallback_message(
-    *, lang: str | None, need_type: str, calling: str
-) -> str:
-    lang_code = normalize_lang(lang)
-    variants_by_need = _arisa_fallback_variants(lang_code)
-    variants = variants_by_need.get(need_type) or variants_by_need.get("unknown", ())
-    if not variants:
-        return t(lang_code, "OPENAI_CONTENT_FALLBACK")
-    message = random.choice(variants)
-    if calling and calling != "あなた":
-        return message.replace("あなた", calling, 1)
-    return message
-
-
 def extract_completion_content_or_fallback(
     completion: Any,
     *,
@@ -1704,16 +1562,24 @@ def extract_completion_content_or_fallback(
     mode: str | None = None,
     need_type: str | None = None,
     calling: str = "あなた",
+    fallback_user_id: int | None = None,
+    fallback_message_id: int | None = None,
+    fallback_update_id: int | None = None,
 ) -> str:
     content = _extract_completion_content(completion)
     if content is None or not str(content).strip():
         logger.warning("LLM completion content missing; using fallback")
         if mode == "arisa":
-            return _arisa_fallback_message(
+            fallback = get_arisa_fallback_message(
                 lang=lang,
                 need_type=need_type or DEFAULT_ARISA_NEED_TYPE,
                 calling=calling,
+                user_id=fallback_user_id,
+                message_id=fallback_message_id,
+                update_id=fallback_update_id,
             )
+            if fallback:
+                return fallback
         return t(normalize_lang(lang), "OPENAI_CONTENT_FALLBACK")
     return str(content)
 
@@ -1727,6 +1593,9 @@ async def call_openai_with_retry(
     fallback_mode: str | None = None,
     fallback_need_type: str | None = None,
     fallback_calling: str = "あなた",
+    fallback_user_id: int | None = None,
+    fallback_message_id: int | None = None,
+    fallback_update_id: int | None = None,
 ) -> tuple[str, bool]:
     prepared_messages = list(messages)
     max_attempts = 3
@@ -1737,6 +1606,8 @@ async def call_openai_with_retry(
         request_kwargs["temperature"] = temperature
     if request_overrides:
         request_kwargs.update(request_overrides)
+    provider = LLM_PROVIDER or infer_provider(get_openai_base_url())
+    request_kwargs = build_chat_kwargs(provider, request_kwargs)
 
     for attempt in range(1, max_attempts + 1):
         try:
@@ -1750,6 +1621,9 @@ async def call_openai_with_retry(
                 mode=fallback_mode,
                 need_type=fallback_need_type,
                 calling=fallback_calling,
+                fallback_user_id=fallback_user_id,
+                fallback_message_id=fallback_message_id,
+                fallback_update_id=fallback_update_id,
             )
             return postprocess_llm_text(answer, lang=lang_code), False
         except (AuthenticationError, PermissionDeniedError, BadRequestError) as exc:
@@ -1801,6 +1675,9 @@ async def call_openai_with_retry_and_usage(
     fallback_mode: str | None = None,
     fallback_need_type: str | None = None,
     fallback_calling: str = "あなた",
+    fallback_user_id: int | None = None,
+    fallback_message_id: int | None = None,
+    fallback_update_id: int | None = None,
 ) -> tuple[str, bool, int | None]:
     prepared_messages = list(messages)
     max_attempts = 3
@@ -1811,6 +1688,8 @@ async def call_openai_with_retry_and_usage(
         request_kwargs["temperature"] = temperature
     if request_overrides:
         request_kwargs.update(request_overrides)
+    provider = LLM_PROVIDER or infer_provider(get_openai_base_url())
+    request_kwargs = build_chat_kwargs(provider, request_kwargs)
 
     for attempt in range(1, max_attempts + 1):
         try:
@@ -1824,6 +1703,9 @@ async def call_openai_with_retry_and_usage(
                 mode=fallback_mode,
                 need_type=fallback_need_type,
                 calling=fallback_calling,
+                fallback_user_id=fallback_user_id,
+                fallback_message_id=fallback_message_id,
+                fallback_update_id=fallback_update_id,
             )
             usage = getattr(completion, "usage", None)
             total_tokens = getattr(usage, "total_tokens", None) if usage else None
@@ -4728,93 +4610,6 @@ def _is_arisa_tarot_trigger(text: str) -> bool:
     return any(keyword in lowered for keyword in ARISA_TAROT_KEYWORDS)
 
 
-_NEED_KEYWORDS: dict[str, tuple[str, ...]] = {
-    "calm": ("安心", "あんしん", "安心感", "安らぎ"),
-    "tease": ("刺激", "しげき", "スリル"),
-    "clarify": ("整理", "せいり", "整頓"),
-}
-
-
-def _normalize_need_text(text: str) -> str:
-    return unicodedata.normalize("NFKC", text).lower()
-
-
-def _find_keyword_index(text: str, keyword: str) -> int | None:
-    index = text.find(keyword)
-    if index >= 0:
-        return index
-    keyword_len = len(keyword)
-    if keyword_len == 0 or not text:
-        return None
-    lengths = {keyword_len}
-    if keyword_len > 1:
-        lengths.add(keyword_len - 1)
-    lengths.add(keyword_len + 1)
-    for size in sorted(lengths):
-        if size <= 0 or size > len(text):
-            continue
-        for start in range(0, len(text) - size + 1):
-            segment = text[start : start + size]
-            ratio = difflib.SequenceMatcher(None, segment, keyword).ratio()
-            if ratio >= 0.8:
-                return start
-    return None
-
-
-def classify_need(text: str) -> str | None:
-    if not text:
-        return None
-    normalized = _normalize_need_text(text)
-    hits: list[tuple[int, str]] = []
-    for need_type, keywords in _NEED_KEYWORDS.items():
-        best_index: int | None = None
-        for keyword in keywords:
-            normalized_keyword = _normalize_need_text(keyword)
-            index = _find_keyword_index(normalized, normalized_keyword)
-            if index is not None and (best_index is None or index < best_index):
-                best_index = index
-        if best_index is not None:
-            hits.append((best_index, need_type))
-    if not hits:
-        return None
-    hits.sort(key=lambda item: item[0])
-    return hits[0][1]
-
-
-def resolve_arisa_need_type(base_need_type: str | None, user_text: str) -> str:
-    override = classify_need(user_text)
-    if override:
-        return override
-    if base_need_type in ARISA_NEED_TYPE_TEMPERATURE:
-        return base_need_type
-    return DEFAULT_ARISA_NEED_TYPE
-
-
-def get_user_calling(*, paid: bool, known_name: str | None) -> str:
-    if paid and known_name:
-        cleaned = known_name.strip()
-        if cleaned:
-            return f"{cleaned}さん"
-    return "あなた"
-
-
-def arisa_temperature_for_need(need_type: str) -> float:
-    return ARISA_NEED_TYPE_TEMPERATURE.get(
-        need_type, ARISA_NEED_TYPE_TEMPERATURE[DEFAULT_ARISA_NEED_TYPE]
-    )
-
-
-def arisa_generation_params(need_type: str) -> tuple[float, dict[str, Any]]:
-    temperature = arisa_temperature_for_need(need_type)
-    provider = LLM_PROVIDER or infer_provider(get_openai_base_url())
-    overrides: dict[str, Any] = {}
-    if provider in {"openai", "gemini"}:
-        overrides["top_p"] = ARISA_NEED_TYPE_TOP_P.get(need_type, 0.9)
-        overrides["presence_penalty"] = ARISA_NEED_TYPE_PRESENCE.get(need_type, 0.2)
-        overrides["frequency_penalty"] = ARISA_NEED_TYPE_FREQUENCY.get(need_type, 0.15)
-    return temperature, overrides
-
-
 def _arisa_block_notice(lang: str | None = "ja") -> str:
     lang_code = normalize_lang(lang)
     return t(lang_code, "ARISA_BLOCK_NOTICE")
@@ -4875,7 +4670,8 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
     base_need_type = ARISA_BASE_NEED_TYPE.get(user_id)
     need_type = resolve_arisa_need_type(base_need_type, user_query)
     calling = get_user_calling(paid=paid_user, known_name=None)
-    temperature, request_overrides = arisa_generation_params(need_type)
+    provider = LLM_PROVIDER or infer_provider(get_openai_base_url())
+    temperature, request_overrides = arisa_generation_params(need_type, provider=provider)
     _log_access_snapshot(
         user_id=user_id,
         is_admin=is_admin_user(user_id),
@@ -4912,6 +4708,8 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
             fallback_mode="arisa",
             fallback_need_type=need_type,
             fallback_calling=calling,
+            fallback_user_id=user_id,
+            fallback_message_id=getattr(message, "message_id", None),
         )
         openai_latency_ms = (perf_counter() - openai_start) * 1000
         if fatal:
