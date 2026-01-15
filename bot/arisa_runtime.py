@@ -3,6 +3,7 @@ from __future__ import annotations
 import difflib
 import hashlib
 import random
+import re
 import unicodedata
 from functools import lru_cache
 from pathlib import Path
@@ -127,6 +128,16 @@ def get_user_calling(*, paid: bool, known_name: str | None) -> str:
         if cleaned:
             return f"{cleaned}さん"
     return "あなた"
+
+
+def sanitize_arisa_reply(text: str) -> str:
+    if not text:
+        return ""
+    sanitized = re.sub(r"[`*_~]", "", text)
+    sanitized = sanitized.replace("【", "").replace("】", "")
+    sanitized = sanitized.replace("[", "").replace("]", "")
+    sanitized = sanitized.strip()
+    return sanitized or text.strip()
 
 
 def arisa_temperature_for_need(need_type: str) -> float:

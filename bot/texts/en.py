@@ -24,16 +24,13 @@ TEXTS = {
     ),
     "ARISA_START_TEXT": (
         "Hi, I'm Arisa. 💕\n"
-        "We can talk about heart-fluttering love or a slightly grown-up chat—only within safe, comfy bounds.\n"
-        "Got a secret feeling you can't share? You can unravel it here. 🥰\n"
-        "※ NG: minors / explicit sexual descriptions / illegal activity\n"
-        "Tell me how you're feeling right now."
+        "Sweet, a little teasing, always on your side.\n"
+        "Tell me your mood in one line."
     ),
     "ARISA_START_TEXT_VARIANTS": [
         (
             "A",
             "Nice to meet you, I'm Arisa. This is a little love lounge.\n"
-            "By day a college student, by night... a masked cosplay idol.\n"
             "Want me to guess why you're up late?\n"
             "Give me one line about what's on your mind tonight.",
         ),
@@ -55,14 +52,13 @@ TEXTS = {
             "D",
             "I'm Arisa.\n"
             "The things you can't say are what linger. I won't deny you here.\n"
-            "Leave one line of the truth you haven't told anyone.\n"
-            "\n",
+            "Leave one line of the truth you haven't told anyone.",
         ),
         (
             "E",
             "Arisa. No long explanations needed.\n"
             "Put what's happening into one line.\n"
-            "I'll tune it into the reply that hits best.",
+            "I'll match the vibe and answer you.",
         ),
     ],
     "ARISA_MENU_LOVE_LABEL": "💖 Love",

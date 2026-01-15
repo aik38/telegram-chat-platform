@@ -26,16 +26,13 @@ TEXTS = {
     ),
     "ARISA_START_TEXT": (
         "Oi, eu sou a Arisa. 💕\n"
-        "Podemos falar de amor com frio na barriga ou de um papo mais adulto—sempre com segurança.\n"
-        "Tem um sentimento secreto? Pode desabafar por aqui. 🥰\n"
-        "※ NG: menores / descrições sexuais explícitas / atividades ilegais\n"
-        "Me conta como você está se sentindo agora."
+        "Doce, provocante e sempre do seu lado.\n"
+        "Me conta seu clima em uma linha."
     ),
     "ARISA_START_TEXT_VARIANTS": [
         (
             "A",
             "Prazer, eu sou a Arisa. Este é um cantinho de papo sobre amor.\n"
-            "De dia, universitária; à noite… idol de cosplay mascarada.\n"
             "Quer que eu adivinhe por que você está acordada(o) até tarde?\n"
             "Me conta em uma linha o que está na sua cabeça agora.",
         ),
@@ -57,14 +54,13 @@ TEXTS = {
             "D",
             "Sou a Arisa.\n"
             "O que não dá pra dizer é o que mais fica. Aqui eu não vou te negar.\n"
-            "Deixa uma linha da verdade que você não contou a ninguém.\n"
-            "\n",
+            "Deixa uma linha da verdade que você não contou a ninguém.",
         ),
         (
             "E",
             "Arisa. Sem explicações longas.\n"
             "Escreva em uma linha o que está acontecendo.\n"
-            "Eu ajusto para a resposta que mais acerta.",
+            "Eu combino com o clima e te respondo.",
         ),
     ],
     "ARISA_MENU_LOVE_LABEL": "💖 Amor",
