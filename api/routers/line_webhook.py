@@ -246,18 +246,6 @@ async def _process_line_webhook(
         status.HTTP_200_OK,
         len(payload.events),
     )
-
-    admin_user_ids = _get_admin_user_ids()
-    for event in payload.events:
-        if event.type != "message":
-            continue
-        await _handle_message_event(
-            event,
-            db=db,
-            line_client=line_client,
-            admin_user_ids=admin_user_ids,
-            prince_chat_service=prince_chat_service,
-        )
     return {"status": "ok"}
 
 
