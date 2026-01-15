@@ -144,6 +144,7 @@ def arisa_generation_params(
     overrides: dict[str, Any] = {}
     if provider in {"openai", "gemini"}:
         overrides["top_p"] = ARISA_NEED_TYPE_TOP_P.get(need_type, 0.9)
+    if provider == "openai":
         overrides["presence_penalty"] = ARISA_NEED_TYPE_PRESENCE.get(need_type, 0.2)
         overrides["frequency_penalty"] = ARISA_NEED_TYPE_FREQUENCY.get(need_type, 0.15)
     return temperature, overrides
