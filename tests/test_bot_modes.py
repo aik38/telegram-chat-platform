@@ -167,6 +167,40 @@ def test_start_message_shorter(monkeypatch, tmp_path):
     assert "7日／30日パス" in message.answers[0]
 
 
+def test_arisa_start_returns_variant(monkeypatch, tmp_path):
+    bot_main = import_bot_main(monkeypatch, tmp_path)
+    from core import db as core_db
+
+    core_db.set_user_lang(501, "ja")
+    message = DummyMessage("/start", user_id=501)
+    variants = t("ja", "ARISA_START_TEXT_VARIANTS")
+
+    asyncio.run(bot_main.arisa_start(message))
+
+    assert message.answers
+    expected_texts = {text for _, text in variants}
+    expected_variants = {variant for variant, _ in variants}
+    assert message.answers[0] in expected_texts
+    assert bot_main.ARISA_START_VARIANTS[501] in expected_variants
+
+
+def test_arisa_start_respects_mocked_choice(monkeypatch, tmp_path):
+    bot_main = import_bot_main(monkeypatch, tmp_path)
+    from core import db as core_db
+
+    core_db.set_user_lang(502, "ja")
+    message = DummyMessage("/start", user_id=502)
+    variants = t("ja", "ARISA_START_TEXT_VARIANTS")
+    expected_variant = variants[2]
+
+    monkeypatch.setattr(bot_main.random, "choice", lambda seq: expected_variant)
+
+    asyncio.run(bot_main.arisa_start(message))
+
+    assert message.answers[0] == expected_variant[1]
+    assert bot_main.ARISA_START_VARIANTS[502] == expected_variant[0]
+
+
 def test_love1_command_is_alias(monkeypatch, tmp_path):
     bot_main = import_bot_main(monkeypatch, tmp_path)
 
