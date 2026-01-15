@@ -29,6 +29,42 @@ TEXTS = {
         "※ NG: minors / explicit sexual descriptions / illegal activity\n"
         "Tell me how you're feeling right now."
     ),
+    "ARISA_START_TEXT_VARIANTS": [
+        (
+            "A",
+            "Nice to meet you, I'm Arisa. This is a little love lounge.\n"
+            "By day a college student, by night... a masked cosplay idol.\n"
+            "Want me to guess why you're up late?\n"
+            "Right now, what do you want most: “comfort”, “thrill”, or “clarity”? (reply as-is)",
+        ),
+        (
+            "B",
+            "Good evening, I'm Arisa.\n"
+            "You're good at acting tough… but I can see through it.\n"
+            "Come with your honest feelings today. I'll only be a little teasing.\n"
+            "Right now, what do you want most: “comfort”, “thrill”, or “clarity”? (one word is fine)",
+        ),
+        (
+            "C",
+            "Welcome back. It's Arisa.\n"
+            "You've been tired in a way you can't tell anyone today.\n"
+            "You don't have to push yourself here.\n"
+            "Right now, what do you want most: “comfort”, “thrill”, or “clarity”? (pick one)",
+        ),
+        (
+            "D",
+            "I'm Arisa.\n"
+            "The things you can't say are what linger. I won't deny you here.\n"
+            "Leave one line of the truth you haven't told anyone.\n"
+            "\n",
+        ),
+        (
+            "E",
+            "Arisa. No long explanations needed.\n"
+            "Put what's happening into one line.\n"
+            "I'll tune it into the reply that hits best.",
+        ),
+    ],
     "ARISA_MENU_LOVE_LABEL": "💖 Love",
     "ARISA_MENU_SEXY_LABEL": "🔥 Sexy",
     "ARISA_LOVE_PROMPT": (

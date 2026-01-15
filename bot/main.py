@@ -253,6 +253,7 @@ USER_MODE: dict[int, str] = {}
 TAROT_FLOW: dict[int, str | None] = {}
 TAROT_THEME: dict[int, str] = {}
 USER_STATE_LAST_ACTIVE: dict[int, datetime] = {}
+ARISA_START_VARIANTS: dict[int, str] = {}
 DEFAULT_THEME = "life"
 
 TAROT_THEME_LABELS: dict[str, str] = {
@@ -1846,6 +1847,7 @@ def reset_conversation_state(user_id: int | None) -> None:
     USER_MODE.pop(user_id, None)
     reset_tarot_state(user_id)
     USER_STATE_LAST_ACTIVE.pop(user_id, None)
+    ARISA_START_VARIANTS.pop(user_id, None)
 
 
 def mark_user_active(user_id: int | None, *, now: datetime | None = None) -> None:
@@ -2291,9 +2293,15 @@ def get_start_text(lang: str | None = "ja") -> str:
     return t(lang_code, "START_TEXT")
 
 
-def get_arisa_start_text(lang: str | None = "ja") -> str:
+def get_arisa_start_text(lang: str | None = "ja") -> tuple[str, str]:
     lang_code = normalize_lang(lang)
-    return t(lang_code, "ARISA_START_TEXT")
+    variants = t(lang_code, "ARISA_START_TEXT_VARIANTS")
+    if isinstance(variants, (list, tuple)) and variants:
+        variant, text = random.choice(variants)
+        if text:
+            return str(text), str(variant)
+    text = t(lang_code, "ARISA_START_TEXT")
+    return (text if isinstance(text, str) else str(text), "A")
 
 
 def _get_arisa_prompt_variants(prompt_key: str, lang: str | None) -> list[str]:
@@ -4447,7 +4455,17 @@ async def arisa_start(message: Message) -> None:
         ensure_user(user_id)
         ensure_arisa_trial(user_id)
     lang, is_persisted = resolve_user_lang(message)
-    start_text = get_arisa_start_text(lang=lang)
+    start_text, start_variant = get_arisa_start_text(lang=lang)
+    if user_id is not None:
+        ARISA_START_VARIANTS[user_id] = start_variant
+    logger.info(
+        "Arisa start message sent",
+        extra={
+            "mode": "arisa",
+            "user_id": user_id,
+            "start_variant": start_variant,
+        },
+    )
     if not is_persisted:
         prompt = f"{t(lang, 'LANGUAGE_SELECT_PROMPT')}\n\n{start_text}"
         await message.answer(prompt, reply_markup=build_lang_keyboard(lang=lang))
@@ -4522,7 +4540,17 @@ async def arisa_handle_lang_set(query: CallbackQuery) -> None:
     lang_label = lang_label_map.get(normalized, normalized)
     confirmation = t(normalized, "LANGUAGE_SET_CONFIRMATION", language=lang_label)
     reply_markup = arisa_menu_kb(lang=normalized)
-    start_text = get_arisa_start_text(lang=normalized)
+    start_text, start_variant = get_arisa_start_text(lang=normalized)
+    if user_id is not None:
+        ARISA_START_VARIANTS[user_id] = start_variant
+    logger.info(
+        "Arisa start message sent",
+        extra={
+            "mode": "arisa",
+            "user_id": user_id,
+            "start_variant": start_variant,
+        },
+    )
     if query.message:
         await query.message.answer(confirmation, reply_markup=reply_markup)
         await query.message.answer(start_text, reply_markup=reply_markup)

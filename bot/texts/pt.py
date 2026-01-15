@@ -31,6 +31,42 @@ TEXTS = {
         "※ NG: menores / descrições sexuais explícitas / atividades ilegais\n"
         "Me conta como você está se sentindo agora."
     ),
+    "ARISA_START_TEXT_VARIANTS": [
+        (
+            "A",
+            "Prazer, eu sou a Arisa. Este é um cantinho de papo sobre amor.\n"
+            "De dia, universitária; à noite… idol de cosplay mascarada.\n"
+            "Quer que eu adivinhe por que você está acordada(o) até tarde?\n"
+            "Agora, o que você mais quer: “aconchego”, “emoção” ou “clareza”? (responda assim mesmo)",
+        ),
+        (
+            "B",
+            "Boa noite, eu sou a Arisa.\n"
+            "Você é boa(o) em bancar forte… mas comigo não cola.\n"
+            "Hoje vem com sinceridade. Vou pegar leve nas provocações.\n"
+            "Agora, o que você mais quer: “aconchego”, “emoção” ou “clareza”? (uma palavra basta)",
+        ),
+        (
+            "C",
+            "Que bom te ver. Sou a Arisa.\n"
+            "Hoje você cansou de um jeito que não dá pra contar pra ninguém.\n"
+            "Aqui, você não precisa se esforçar.\n"
+            "Agora, o que você mais quer: “aconchego”, “emoção” ou “clareza”? (escolha uma)",
+        ),
+        (
+            "D",
+            "Sou a Arisa.\n"
+            "O que não dá pra dizer é o que mais fica. Aqui eu não vou te negar.\n"
+            "Deixa uma linha da verdade que você não contou a ninguém.\n"
+            "\n",
+        ),
+        (
+            "E",
+            "Arisa. Sem explicações longas.\n"
+            "Escreva em uma linha o que está acontecendo.\n"
+            "Eu ajusto para a resposta que mais acerta.",
+        ),
+    ],
     "ARISA_MENU_LOVE_LABEL": "💖 Amor",
     "ARISA_MENU_SEXY_LABEL": "🔥 Sexy",
     "ARISA_LOVE_PROMPT": (
