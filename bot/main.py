@@ -60,6 +60,7 @@ from core.db import (
     get_recent_feedback,
     get_user,
     get_user_lang,
+    has_active_pass,
     grant_purchase,
     has_app_event,
     has_accepted_terms,
@@ -140,6 +141,7 @@ OPENAI_MODEL = "gpt-4o-mini"
 LINE_OPENAI_MODEL = OPENAI_MODEL
 IMAGE_ADDON_ENABLED = False
 _MIDDLEWARES_CONFIGURED = False
+LLM_PROVIDER: str | None = None
 
 
 def _get_env_model(name: str, fallback: str) -> str:
@@ -169,6 +171,7 @@ def _apply_runtime_config() -> None:
     global TRIAL_FREE_CREDITS
     global bot
     global client
+    global LLM_PROVIDER
     global _MIDDLEWARES_CONFIGURED
 
     CONFIG = load_config()
@@ -196,6 +199,7 @@ def _apply_runtime_config() -> None:
 
     bot = Bot(token=CONFIG.telegram_bot_token)
     client = make_openai_client(CONFIG.openai_api_key)
+    LLM_PROVIDER = infer_provider(get_openai_base_url())
 
     if not _MIDDLEWARES_CONFIGURED:
         dp.message.middleware(
@@ -212,6 +216,53 @@ def _apply_runtime_config() -> None:
 
     ARISA_PASS_PRODUCTS["ARISA_PASS_7D"]["daily_limit"] = PASS_7D_DAILY_LIMIT
     ARISA_PASS_PRODUCTS["ARISA_PASS_30D"]["daily_limit"] = PASS_30D_DAILY_LIMIT
+
+
+def _get_runtime_admin_ids() -> set[int]:
+    if CONFIG:
+        return set(CONFIG.admin_user_ids)
+    return get_admin_user_ids()
+
+
+def _mask_identifier(value: int | str | None) -> str:
+    if value is None:
+        return "none"
+    raw = str(value)
+    if len(raw) <= 4:
+        return "*" * len(raw)
+    return f"{'*' * (len(raw) - 4)}{raw[-4:]}"
+
+
+def _mask_admin_ids(raw: str | None) -> str:
+    if not raw:
+        return ""
+    parts = []
+    for token in raw.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        parts.append(_mask_identifier(token))
+    return ",".join(parts)
+
+
+def _log_access_snapshot(
+    *,
+    user_id: int | None,
+    is_admin: bool,
+    is_paid: bool,
+    pass_active: bool | None = None,
+) -> None:
+    raw_admin_ids = os.getenv("ADMIN_USER_IDS", "")
+    parsed_admin_ids = ",".join(_mask_identifier(value) for value in sorted(_get_runtime_admin_ids()))
+    logger.info(
+        "Access snapshot -> admin_ids_raw=%s admin_ids_parsed=%s user_id=%s is_admin=%s is_paid=%s pass_active=%s",
+        _mask_admin_ids(raw_admin_ids),
+        parsed_admin_ids,
+        _mask_identifier(user_id),
+        is_admin,
+        is_paid,
+        pass_active,
+    )
 
 
 def _build_request_id(event: CallbackQuery | Message) -> str:
@@ -259,10 +310,28 @@ ARISA_START_VARIANTS: dict[int, str] = {}
 ARISA_BASE_NEED_TYPE: dict[int, str] = {}
 DEFAULT_ARISA_NEED_TYPE = "unknown"
 ARISA_NEED_TYPE_TEMPERATURE = {
-    "calm": 0.4,
-    "clarify": 0.6,
-    "tease": 0.9,
-    "unknown": 0.4,
+    "calm": 0.68,
+    "clarify": 0.55,
+    "tease": 0.95,
+    "unknown": 0.68,
+}
+ARISA_NEED_TYPE_TOP_P = {
+    "calm": 0.9,
+    "clarify": 0.85,
+    "tease": 0.95,
+    "unknown": 0.9,
+}
+ARISA_NEED_TYPE_PRESENCE = {
+    "calm": 0.2,
+    "clarify": 0.1,
+    "tease": 0.35,
+    "unknown": 0.2,
+}
+ARISA_NEED_TYPE_FREQUENCY = {
+    "calm": 0.15,
+    "clarify": 0.1,
+    "tease": 0.25,
+    "unknown": 0.15,
 }
 DEFAULT_THEME = "life"
 
@@ -316,6 +385,7 @@ ARISA_ALLOWED_COMMANDS = {
     "/lang",
     "/status",
     "/store",
+    "/whoami",
 }
 ARISA_TAROT_KEYWORDS = (
     "占い",
@@ -1407,6 +1477,14 @@ def build_general_chat_messages(user_query: str, *, lang: str | None = "ja") -> 
     ]
 
 
+def _arisa_tone_prompt(lang: str) -> str:
+    if lang == "en":
+        return "Keep replies short, affectionate, close in distance, and refined."
+    if lang == "pt":
+        return "Responda de forma curta, carinhosa, próxima e elegante."
+    return "短く、甘えた距離感で、上品に返すこと。"
+
+
 def build_arisa_messages(
     user_query: str,
     *,
@@ -1430,6 +1508,7 @@ def build_arisa_messages(
     parts = [system_prompt]
     if boundary_lines:
         parts.append(boundary_lines.strip())
+    parts.append(_arisa_tone_prompt(lang_code))
     parts.append(internal_flags)
     return [
         {"role": "system", "content": "\n\n".join(parts)},
@@ -1437,40 +1516,79 @@ def build_arisa_messages(
     ]
 
 
-def _extract_choice_content(choice: Any) -> str | None:
-    message = getattr(choice, "message", None)
-    if message:
-        content = getattr(message, "content", None)
+def _coerce_llm_text(content: Any) -> str | None:
+    if content is None:
+        return None
+    if isinstance(content, str):
+        return content
+    if isinstance(content, dict):
+        text_value = content.get("text")
+        if isinstance(text_value, str):
+            return text_value
+    if isinstance(content, list):
+        text_parts: list[str] = []
+        for part in content:
+            if isinstance(part, str):
+                text_parts.append(part)
+                continue
+            if isinstance(part, dict):
+                part_type = part.get("type")
+                text_value = part.get("text")
+                if part_type == "text" and isinstance(text_value, str):
+                    text_parts.append(text_value)
+                elif isinstance(text_value, str):
+                    text_parts.append(text_value)
+                continue
+            part_text = getattr(part, "text", None)
+            part_type = getattr(part, "type", None)
+            if part_type == "text" and isinstance(part_text, str):
+                text_parts.append(part_text)
+        joined = "".join(text_parts).strip()
+        return joined or None
+    return None
+
+
+def _extract_message_content(message: Any) -> str | None:
+    if message is None:
+        return None
+    if isinstance(message, dict):
+        content = _coerce_llm_text(message.get("content"))
         if content:
             return content
-        if isinstance(message, dict):
-            content = message.get("content")
-            if content:
-                return content
+        return _coerce_llm_text(message.get("parts"))
+    content = _coerce_llm_text(getattr(message, "content", None))
+    if content:
+        return content
+    return _coerce_llm_text(getattr(message, "parts", None))
+
+
+def _extract_choice_content(choice: Any) -> str | None:
+    message = getattr(choice, "message", None)
+    content = _extract_message_content(message)
+    if content:
+        return content
     if isinstance(choice, dict):
-        message = choice.get("message")
-        if isinstance(message, dict):
-            content = message.get("content")
-            if content:
-                return content
-        content = choice.get("content")
+        content = _extract_message_content(choice.get("message"))
+        if content:
+            return content
+        content = _coerce_llm_text(choice.get("content"))
         if content:
             return content
         delta = choice.get("delta")
         if isinstance(delta, dict):
-            content = delta.get("content")
+            content = _coerce_llm_text(delta.get("content"))
             if content:
                 return content
     text = getattr(choice, "text", None)
-    if text:
+    if isinstance(text, str) and text:
         return text
     delta = getattr(choice, "delta", None)
     if delta:
-        content = getattr(delta, "content", None)
+        content = _coerce_llm_text(getattr(delta, "content", None))
         if content:
             return content
         if isinstance(delta, dict):
-            content = delta.get("content")
+            content = _coerce_llm_text(delta.get("content"))
             if content:
                 return content
     return None
@@ -1494,16 +1612,121 @@ def _extract_completion_content(completion: Any) -> str | None:
     return None
 
 
-def extract_completion_content_or_fallback(completion: Any, *, lang: str | None = "ja") -> str:
+def _arisa_fallback_variants(lang: str) -> dict[str, tuple[str, ...]]:
+    if lang == "en":
+        return {
+            "calm": (
+                "…Sorry, my words tangled for a second. Are you okay right now?",
+                "…Hold on. I want to be gentle with you. What’s the one thing you want me to say first?",
+                "…I stumbled a bit. Tell me what you want most from me right now.",
+            ),
+            "clarify": (
+                "…Let me reset. What’s the one point you want me to untangle first?",
+                "…I got caught in my thoughts. What detail matters most to you right now?",
+                "…Give me one line—what feels most confusing at the moment?",
+            ),
+            "tease": (
+                "…Hehe, I got a little carried away. What mood should I lean into?",
+                "…Oops, I teased too much. Tell me your vibe in one word.",
+                "…I went quiet on purpose. Now, what do you want me to do with you—just for now?",
+            ),
+            "unknown": (
+                "…Sorry, my words got twisted. What do you want to feel right now?",
+                "…I want to stay close to you. What’s the one thing you want from me?",
+                "…Let me try again. What’s on your mind most right now?",
+            ),
+        }
+    if lang == "pt":
+        return {
+            "calm": (
+                "…Desculpa, minhas palavras se embolaram. Você tá bem agora?",
+                "…Espera. Quero cuidar de você direitinho. O que você quer ouvir primeiro?",
+                "…Eu tropecei um pouco. Me diz o que você quer mais de mim agora.",
+            ),
+            "clarify": (
+                "…Deixa eu reiniciar. Qual ponto você quer organizar primeiro?",
+                "…Me perdi um pouco. Qual detalhe importa mais agora?",
+                "…Me dá uma linha: o que tá mais confuso neste momento?",
+            ),
+            "tease": (
+                "…Hehe, me empolguei. Em que clima você quer que eu entre?",
+                "…Ops, provoquei demais. Diz tua vibe em uma palavra.",
+                "…Fiquei quieta de propósito. Agora me diz: o que você quer de mim, só por agora?",
+            ),
+            "unknown": (
+                "…Desculpa, minhas palavras travaram. O que você quer sentir agora?",
+                "…Quero ficar bem pertinho. O que você quer de mim agora?",
+                "…Vamos de novo. O que tá mais forte na sua cabeça agora?",
+            ),
+        }
+    return {
+        "calm": (
+            "…ごめん、言葉が絡まった。あなた、今いちばん欲しいのは何？",
+            "…うまく言えなかった。あなた、今いちばん欲しい言葉を教えて？",
+            "…いまは落ち着いて受け止めたい。あなたがいちばん欲しい言葉、教えて？",
+        ),
+        "clarify": (
+            "…ごめん、頭の中が渋滞した。いま一番ひっかかってる点はどこ？",
+            "…いったん深呼吸。いま一番ひっかかってる点、ひと言で教えて？",
+            "…私が整えるね。いちばん気になる部分はどこ？",
+        ),
+        "tease": (
+            "…ふふ、ちょっと焦らしすぎた。あなた、いまの気分を一言で教えて？",
+            "…ごめんね、空気に酔った。あなたは今、どんな温度がほしい？",
+            "…黙ったの、わざと。あなた、今どんなムード？",
+        ),
+        "unknown": (
+            "…ごめん、言葉がうまく出ない。あなた、いまいちばん欲しいのは何？",
+            "…今はちゃんと寄り添いたい。あなた、今の気分を一言で教えて？",
+            "…言い直すね。あなた、今いちばん気になってることって何？",
+        ),
+    }
+
+
+def _arisa_fallback_message(
+    *, lang: str | None, need_type: str, calling: str
+) -> str:
+    lang_code = normalize_lang(lang)
+    variants_by_need = _arisa_fallback_variants(lang_code)
+    variants = variants_by_need.get(need_type) or variants_by_need.get("unknown", ())
+    if not variants:
+        return t(lang_code, "OPENAI_CONTENT_FALLBACK")
+    message = random.choice(variants)
+    if calling and calling != "あなた":
+        return message.replace("あなた", calling, 1)
+    return message
+
+
+def extract_completion_content_or_fallback(
+    completion: Any,
+    *,
+    lang: str | None = "ja",
+    mode: str | None = None,
+    need_type: str | None = None,
+    calling: str = "あなた",
+) -> str:
     content = _extract_completion_content(completion)
     if content is None or not str(content).strip():
         logger.warning("LLM completion content missing; using fallback")
+        if mode == "arisa":
+            return _arisa_fallback_message(
+                lang=lang,
+                need_type=need_type or DEFAULT_ARISA_NEED_TYPE,
+                calling=calling,
+            )
         return t(normalize_lang(lang), "OPENAI_CONTENT_FALLBACK")
     return str(content)
 
 
 async def call_openai_with_retry(
-    messages: Iterable[dict[str, str]], *, lang: str | None = "ja", temperature: float | None = None
+    messages: Iterable[dict[str, str]],
+    *,
+    lang: str | None = "ja",
+    temperature: float | None = None,
+    request_overrides: dict[str, Any] | None = None,
+    fallback_mode: str | None = None,
+    fallback_need_type: str | None = None,
+    fallback_calling: str = "あなた",
 ) -> tuple[str, bool]:
     prepared_messages = list(messages)
     max_attempts = 3
@@ -1512,6 +1735,8 @@ async def call_openai_with_retry(
     request_kwargs = {"model": OPENAI_MODEL, "messages": prepared_messages}
     if temperature is not None:
         request_kwargs["temperature"] = temperature
+    if request_overrides:
+        request_kwargs.update(request_overrides)
 
     for attempt in range(1, max_attempts + 1):
         try:
@@ -1519,7 +1744,13 @@ async def call_openai_with_retry(
                 None,
                 lambda: client.chat.completions.create(**request_kwargs),
             )
-            answer = extract_completion_content_or_fallback(completion, lang=lang_code)
+            answer = extract_completion_content_or_fallback(
+                completion,
+                lang=lang_code,
+                mode=fallback_mode,
+                need_type=fallback_need_type,
+                calling=fallback_calling,
+            )
             return postprocess_llm_text(answer, lang=lang_code), False
         except (AuthenticationError, PermissionDeniedError, BadRequestError) as exc:
             logger.exception("Fatal OpenAI error: %s", exc)
@@ -1562,7 +1793,14 @@ async def call_openai_with_retry(
 
 
 async def call_openai_with_retry_and_usage(
-    messages: Iterable[dict[str, str]], *, lang: str | None = "ja", temperature: float | None = None
+    messages: Iterable[dict[str, str]],
+    *,
+    lang: str | None = "ja",
+    temperature: float | None = None,
+    request_overrides: dict[str, Any] | None = None,
+    fallback_mode: str | None = None,
+    fallback_need_type: str | None = None,
+    fallback_calling: str = "あなた",
 ) -> tuple[str, bool, int | None]:
     prepared_messages = list(messages)
     max_attempts = 3
@@ -1571,6 +1809,8 @@ async def call_openai_with_retry_and_usage(
     request_kwargs = {"model": OPENAI_MODEL, "messages": prepared_messages}
     if temperature is not None:
         request_kwargs["temperature"] = temperature
+    if request_overrides:
+        request_kwargs.update(request_overrides)
 
     for attempt in range(1, max_attempts + 1):
         try:
@@ -1578,7 +1818,13 @@ async def call_openai_with_retry_and_usage(
                 None,
                 lambda: client.chat.completions.create(**request_kwargs),
             )
-            answer = extract_completion_content_or_fallback(completion, lang=lang_code)
+            answer = extract_completion_content_or_fallback(
+                completion,
+                lang=lang_code,
+                mode=fallback_mode,
+                need_type=fallback_need_type,
+                calling=fallback_calling,
+            )
             usage = getattr(completion, "usage", None)
             total_tokens = getattr(usage, "total_tokens", None) if usage else None
             return postprocess_llm_text(answer, lang=lang_code), False, total_tokens
@@ -2232,7 +2478,9 @@ def is_paid_spread(spread: Spread) -> bool:
 
 
 def is_admin_user(user_id: int | None) -> bool:
-    return user_id is not None and user_id in ADMIN_USER_IDS
+    if user_id is None:
+        return False
+    return user_id in _get_runtime_admin_ids()
 
 
 def get_bot_display_name() -> str:
@@ -2295,6 +2543,14 @@ async def execute_tarot_request(
         )
         return
 
+    has_pass = effective_has_pass(user_id, user, now=now)
+    _log_access_snapshot(
+        user_id=user_id,
+        is_admin=is_admin_user(user_id),
+        is_paid=has_pass,
+        pass_active=has_active_pass(user_id, now=now) if user_id is not None else None,
+    )
+
     if spread_to_use == ONE_CARD:
         if user_id is not None and user is not None:
             allowed, short_response, user = _evaluate_one_oracle_access(
@@ -2322,7 +2578,6 @@ async def execute_tarot_request(
         )
         return
     elif PAYWALL_ENABLED and is_paid_spread(spread_to_use):
-        has_pass = effective_has_pass(user_id, user, now=now)
         if not has_pass:
             if user_id is None or not consume_ticket_for_spread(user_id, spread_to_use):
                 paywall_triggered = True
@@ -2452,15 +2707,26 @@ def is_arisa_paid_user(
     user_id: int, *, user: UserRecord | None = None, now: datetime | None = None
 ) -> bool:
     now = now or utcnow()
-    if is_admin_user(user_id):
-        return True
+    final_is_paid, _, _ = resolve_arisa_paid_state(user_id, user=user, now=now)
+    return final_is_paid
+
+
+def resolve_arisa_paid_state(
+    user_id: int, *, user: UserRecord | None = None, now: datetime | None = None
+) -> tuple[bool, bool, bool]:
+    now = now or utcnow()
     if user is None:
         user = get_user_with_default(user_id, now=now)
-    if user and user.arisa_pass_until and user.arisa_pass_until > now:
-        return True
-    return has_payment_event(
+    pass_active = bool(user and user.arisa_pass_until and user.arisa_pass_until > now)
+    paid_subscription_flag = pass_active or has_payment_event(
         user_id=user_id, event_type="successful_payment", sku_prefix="ARISA_"
     )
+    final_is_paid = (
+        is_admin_user(user_id)
+        or has_active_pass(user_id, now=now)
+        or paid_subscription_flag
+    )
+    return final_is_paid, pass_active, paid_subscription_flag
 
 
 def ensure_arisa_trial(user_id: int, *, now: datetime | None = None) -> None:
@@ -2551,9 +2817,10 @@ def format_arisa_status(
     now = now or utcnow()
     lang_code = normalize_lang(lang)
     admin_mode = is_admin_user(user.user_id)
-    pass_active = bool(user.arisa_pass_until and user.arisa_pass_until > now)
+    paid_user, pass_active, _paid_subscription_flag = resolve_arisa_paid_state(
+        user.user_id, user=user, now=now
+    )
     remaining_today = _arisa_pass_remaining(user, now=now) if pass_active else 0
-    paid_user = is_arisa_paid_user(user.user_id, user=user, now=now)
     lines = [
         t(lang_code, "ARISA_STATUS_TITLE"),
         t(lang_code, "ARISA_STATUS_CREDITS_LINE", credits=user.arisa_credits),
@@ -3263,6 +3530,24 @@ async def cmd_status(message: Message) -> None:
     mark_user_active(message.from_user.id if message.from_user else None)
     now = utcnow()
     await prompt_status(message, now=now)
+
+
+@tarot_router.message(Command("whoami"))
+async def cmd_whoami(message: Message) -> None:
+    if not _should_process_message(message, handler="whoami"):
+        return
+
+    user_id = message.from_user.id if message.from_user else None
+    lang = get_user_lang_or_default(user_id)
+    if user_id is None:
+        await message.answer(t(lang, "USER_INFO_MISSING"))
+        return
+    if not is_admin_user(user_id):
+        await message.answer(_admin_only_message(lang))
+        return
+    now = utcnow()
+    lines = _build_whoami_lines(user_id=user_id, lang=lang, now=now)
+    await message.answer("\n".join(lines), reply_markup=build_base_menu(user_id))
 
 
 @tarot_router.message(Command("feedback"))
@@ -4255,6 +4540,41 @@ def _build_consult_block_message(*, trial_active: bool, short: bool = False) -> 
     return "6日目以降の相談チャットはパス専用です。/buy から7日または30日のパスをご検討ください。"
 
 
+def _admin_only_message(lang: str | None) -> str:
+    lang_code = normalize_lang(lang)
+    if lang_code == "en":
+        return "This command is available to admins only."
+    if lang_code == "pt":
+        return "Este comando é apenas para administradores."
+    return "このコマンドは管理者のみ使用できます。"
+
+
+def _build_whoami_lines(
+    *,
+    user_id: int,
+    lang: str | None,
+    now: datetime,
+) -> list[str]:
+    if BOT_MODE == "arisa":
+        user = get_user_with_default(user_id, now=now)
+        is_paid, pass_active, _paid_subscription_flag = resolve_arisa_paid_state(
+            user_id, user=user, now=now
+        )
+        remaining = _arisa_pass_remaining(user, now=now) if user and pass_active else None
+    else:
+        is_paid = effective_has_pass(user_id, get_user_with_default(user_id, now=now), now=now)
+        pass_active = has_active_pass(user_id, now=now)
+        remaining = None
+
+    return [
+        f"telegram_user_id: {user_id}",
+        f"is_admin: {is_admin_user(user_id)}",
+        f"is_paid: {is_paid}",
+        f"pass_active: {pass_active}",
+        f"remaining_messages: {remaining if remaining is not None else 'n/a'}",
+    ]
+
+
 async def handle_general_chat(message: Message, user_query: str) -> None:
     now = utcnow()
     user_id = message.from_user.id if message.from_user else None
@@ -4289,6 +4609,12 @@ async def handle_general_chat(message: Message, user_query: str) -> None:
         trial_active = _is_in_general_chat_trial(user, now)
         out_of_quota = user.general_chat_count_today >= FREE_GENERAL_CHAT_PER_DAY
         has_pass = effective_has_pass(user_id, user, now=now)
+        _log_access_snapshot(
+            user_id=user_id,
+            is_admin=admin_mode,
+            is_paid=admin_mode or has_pass,
+            pass_active=has_active_pass(user_id, now=now) if user_id is not None else None,
+        )
 
         if (trial_active and out_of_quota and not has_pass) or (
             not trial_active and not has_pass
@@ -4478,6 +4804,17 @@ def arisa_temperature_for_need(need_type: str) -> float:
     )
 
 
+def arisa_generation_params(need_type: str) -> tuple[float, dict[str, Any]]:
+    temperature = arisa_temperature_for_need(need_type)
+    provider = LLM_PROVIDER or infer_provider(get_openai_base_url())
+    overrides: dict[str, Any] = {}
+    if provider in {"openai", "gemini"}:
+        overrides["top_p"] = ARISA_NEED_TYPE_TOP_P.get(need_type, 0.9)
+        overrides["presence_penalty"] = ARISA_NEED_TYPE_PRESENCE.get(need_type, 0.2)
+        overrides["frequency_penalty"] = ARISA_NEED_TYPE_FREQUENCY.get(need_type, 0.15)
+    return temperature, overrides
+
+
 def _arisa_block_notice(lang: str | None = "ja") -> str:
     lang_code = normalize_lang(lang)
     return t(lang_code, "ARISA_BLOCK_NOTICE")
@@ -4532,11 +4869,19 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
             reply_markup=build_store_keyboard(lang=lang),
         )
         return
-    paid_user = is_arisa_paid_user(user_id, user=user, now=now)
+    paid_user, pass_active, _paid_subscription_flag = resolve_arisa_paid_state(
+        user_id, user=user, now=now
+    )
     base_need_type = ARISA_BASE_NEED_TYPE.get(user_id)
     need_type = resolve_arisa_need_type(base_need_type, user_query)
     calling = get_user_calling(paid=paid_user, known_name=None)
-    temperature = arisa_temperature_for_need(need_type)
+    temperature, request_overrides = arisa_generation_params(need_type)
+    _log_access_snapshot(
+        user_id=user_id,
+        is_admin=is_admin_user(user_id),
+        is_paid=paid_user,
+        pass_active=pass_active,
+    )
 
     logger.info(
         "Handling Arisa message",
@@ -4563,6 +4908,10 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
             ),
             lang=lang,
             temperature=temperature,
+            request_overrides=request_overrides,
+            fallback_mode="arisa",
+            fallback_need_type=need_type,
+            fallback_calling=calling,
         )
         openai_latency_ms = (perf_counter() - openai_start) * 1000
         if fatal:
@@ -4683,6 +5032,23 @@ async def arisa_cmd_status(message: Message) -> None:
     reset_state_for_explicit_command(message.from_user.id if message.from_user else None)
     now = utcnow()
     await prompt_arisa_status(message, now=now)
+
+
+@arisa_router.message(Command("whoami"))
+async def arisa_cmd_whoami(message: Message) -> None:
+    if not _should_process_message(message, handler="arisa_whoami"):
+        return
+    user_id = message.from_user.id if message.from_user else None
+    lang = get_user_lang_or_default(user_id)
+    if user_id is None:
+        await message.answer(t(lang, "USER_INFO_MISSING"))
+        return
+    if not is_admin_user(user_id):
+        await message.answer(_admin_only_message(lang))
+        return
+    now = utcnow()
+    lines = _build_whoami_lines(user_id=user_id, lang=lang, now=now)
+    await message.answer("\n".join(lines), reply_markup=build_arisa_menu(user_id))
 
 
 @arisa_router.callback_query(F.data.startswith("lang:set:"))
@@ -5185,7 +5551,7 @@ async def main() -> None:
         "Starting akolasia_tarot_bot",
         extra={
             "mode": "startup",
-            "admin_ids_count": len(ADMIN_USER_IDS),
+            "admin_ids_count": len(_get_runtime_admin_ids()),
             "paywall_enabled": PAYWALL_ENABLED,
             "polling": True,
             "character": CHARACTER or None,
