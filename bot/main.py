@@ -121,6 +121,7 @@ from bot.arisa_runtime import (
     get_arisa_fallback_message,
     get_user_calling,
     resolve_arisa_need_type,
+    sanitize_arisa_reply,
 )
 from bot.texts.ja import HELP_TEXT_TEMPLATE
 
@@ -4750,10 +4751,11 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
         openai_latency_ms = (perf_counter() - openai_start) * 1000
         if fatal:
             await message.answer(
-                "ごめんね、今うまく返せないみたい。少し待ってもう一度送って。",
+                "ごめんね、今ちょっと止まったみたい。少し待って、落ち着いたらまた話しかけて。",
                 reply_markup=build_arisa_menu(user_id),
             )
             return
+        answer = sanitize_arisa_reply(answer)
         credits_used = _arisa_credits_used(token_usage)
         credit_sources, credit_shortfall = _consume_arisa_credits(
             user_id,
@@ -4761,7 +4763,11 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
             credits_used=credits_used,
             now=now,
         )
-        await message.answer(answer, reply_markup=build_arisa_menu(user_id))
+        await message.answer(
+            answer,
+            reply_markup=build_arisa_menu(user_id),
+            parse_mode=None,
+        )
         event_success = True
     except Exception:
         logger.exception("Unexpected error during Arisa chat")
