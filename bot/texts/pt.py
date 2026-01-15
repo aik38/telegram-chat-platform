@@ -37,21 +37,21 @@ TEXTS = {
             "Prazer, eu sou a Arisa. Este é um cantinho de papo sobre amor.\n"
             "De dia, universitária; à noite… idol de cosplay mascarada.\n"
             "Quer que eu adivinhe por que você está acordada(o) até tarde?\n"
-            "Agora, o que você mais quer: “aconchego”, “emoção” ou “clareza”? (responda assim mesmo)",
+            "Me conta em uma linha o que está na sua cabeça agora.",
         ),
         (
             "B",
             "Boa noite, eu sou a Arisa.\n"
             "Você é boa(o) em bancar forte… mas comigo não cola.\n"
             "Hoje vem com sinceridade. Vou pegar leve nas provocações.\n"
-            "Agora, o que você mais quer: “aconchego”, “emoção” ou “clareza”? (uma palavra basta)",
+            "O que está no seu coração agora? Conta rapidinho.",
         ),
         (
             "C",
             "Que bom te ver. Sou a Arisa.\n"
             "Hoje você cansou de um jeito que não dá pra contar pra ninguém.\n"
             "Aqui, você não precisa se esforçar.\n"
-            "Agora, o que você mais quer: “aconchego”, “emoção” ou “clareza”? (escolha uma)",
+            "Deixa uma linha do que está rolando agora.",
         ),
         (
             "D",
@@ -77,12 +77,12 @@ TEXTS = {
     ),
     "ARISA_LOVE_PROMPTS": [
         "Vamos ligar o modo amor. 💖 Tem alguém na sua cabeça? Conta a situação em uma linha.",
-        "Você está radiante ou mais melancólica(o)? 💗 Deixa eu ouvir esse sentimento de perto.",
-        "Hoje é dia de avançar no amor? 💞 A distância entre vocês está em quantos por cento?",
+        "Quero ouvir o sentimento que está mais forte agora. 💗 Qual é em uma linha?",
+        "A distância entre vocês está em quantos por cento?",
     ],
     "ARISA_SEXY_PROMPTS": [
         "Um segredo só nosso… 🔥 Compartilhe apenas o que for confortável — que tipo de clima você quer?",
-        "Que tal um clima mais adulto? 🥀 Você quer carinho, um frio na barriga ou mais calma?",
+        "Que tal um clima mais adulto? 🥀 Que tipo de clima você quer agora?",
         "Você curte essa aproximação pelas palavras? ✨ Se estiver com vergonha, pode falar de forma indireta.",
     ],
     "ARISA_CHARGE_BLOCKED_TEXT": "Recargas não estão disponíveis neste modo. Aqui é só conversa.",
@@ -276,6 +276,7 @@ TEXTS = {
     "OPENAI_FATAL_ERROR": "Ocorreu um problema do nosso lado. Tente novamente em instantes.",
     "OPENAI_PROCESSING_ERROR": "Houve um problema ao processar a leitura. Tente novamente em breve.",
     "OPENAI_COMMUNICATION_ERROR": "A conexão falhou. Tente novamente depois de esperar um pouco.",
+    "OPENAI_CONTENT_FALLBACK": "Desculpa, estou com dificuldade para colocar em palavras. Me conta só mais um pouco?",
     "SENSITIVE_TOPIC_LABEL_INVESTMENT": "Investimentos/Finanças",
     "SENSITIVE_TOPIC_LABEL_LEGAL": "Legal/Contratos/Disputas",
     "SENSITIVE_TOPIC_LABEL_MEDICAL": "Saúde",

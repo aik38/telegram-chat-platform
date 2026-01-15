@@ -35,21 +35,21 @@ TEXTS = {
             "Nice to meet you, I'm Arisa. This is a little love lounge.\n"
             "By day a college student, by night... a masked cosplay idol.\n"
             "Want me to guess why you're up late?\n"
-            "Right now, what do you want most: “comfort”, “thrill”, or “clarity”? (reply as-is)",
+            "Give me one line about what's on your mind tonight.",
         ),
         (
             "B",
             "Good evening, I'm Arisa.\n"
             "You're good at acting tough… but I can see through it.\n"
             "Come with your honest feelings today. I'll only be a little teasing.\n"
-            "Right now, what do you want most: “comfort”, “thrill”, or “clarity”? (one word is fine)",
+            "What's sitting in your heart right now? Keep it short.",
         ),
         (
             "C",
             "Welcome back. It's Arisa.\n"
             "You've been tired in a way you can't tell anyone today.\n"
             "You don't have to push yourself here.\n"
-            "Right now, what do you want most: “comfort”, “thrill”, or “clarity”? (pick one)",
+            "Give me one line about what's going on right now.",
         ),
         (
             "D",
@@ -75,12 +75,12 @@ TEXTS = {
     ),
     "ARISA_LOVE_PROMPTS": [
         "Let’s flip the love switch. 💖 Is someone on your mind? Tell me the situation in just one line.",
-        "Are you fluttery or a little wistful? 💗 Let me hear that feeling up close.",
-        "Is today a day to move love forward? 💞 How close are you two—about what percent?",
+        "Let me hear the feeling you're holding most right now. 💗 What is it in one line?",
+        "How close do you feel you two are—about what percent?",
     ],
     "ARISA_SEXY_PROMPTS": [
         "A secret just for us… 🔥 Share only what feels safe—what kind of mood are you in?",
-        "Shall we set a slightly grown-up vibe? 🥀 Do you want comfort, a thrill, or a sense of ease?",
+        "Shall we set a slightly grown-up vibe? 🥀 What mood do you want me to lean into?",
         "Do you like the feeling of getting closer through words? ✨ If it’s shy, it’s okay to keep it vague.",
     ],
     "ARISA_CHARGE_BLOCKED_TEXT": "Top-ups aren't available in this mode. We only chat here.",
@@ -272,6 +272,7 @@ TEXTS = {
     "OPENAI_FATAL_ERROR": "There was an issue on our side. Please try again in a moment.",
     "OPENAI_PROCESSING_ERROR": "We hit a snag processing the reading. Please try again shortly.",
     "OPENAI_COMMUNICATION_ERROR": "It seems the connection failed. Please try again after a short wait.",
+    "OPENAI_CONTENT_FALLBACK": "Sorry, I’m having trouble putting it into words. Tell me just a little more?",
     "SENSITIVE_TOPIC_LABEL_INVESTMENT": "Investment/Finance",
     "SENSITIVE_TOPIC_LABEL_LEGAL": "Legal/Contracts/Disputes",
     "SENSITIVE_TOPIC_LABEL_MEDICAL": "Medical/Health",
