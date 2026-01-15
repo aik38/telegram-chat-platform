@@ -84,6 +84,7 @@ from core.db import (
 from core.monetization import (
     effective_has_pass,
     effective_pass_expires_at,
+    get_admin_user_ids,
     get_paywall_enabled,
     get_user_with_default,
 )
@@ -125,7 +126,7 @@ CONFIG: AppConfig | None = None
 DOTENV_PATH = None
 CHARACTER = ""
 BOT_MODE = "default"
-ADMIN_USER_IDS: set[int] = set()
+ADMIN_USER_IDS: set[int] = get_admin_user_ids()
 SUPPORT_EMAIL = "hasegawaarisa1@gmail.com"
 THROTTLE_MESSAGE_INTERVAL_SEC = 1.2
 THROTTLE_CALLBACK_INTERVAL_SEC = 0.8
@@ -133,7 +134,7 @@ ONE_MESSAGE_TOKENS = 600
 TRIAL_FREE_CREDITS = 10
 PASS_7D_DAILY_LIMIT = 30
 PASS_30D_DAILY_LIMIT = 50
-PAYWALL_ENABLED = False
+PAYWALL_ENABLED = get_paywall_enabled()
 OPENAI_MODEL = "gpt-4o-mini"
 LINE_OPENAI_MODEL = OPENAI_MODEL
 IMAGE_ADDON_ENABLED = False
@@ -254,6 +255,13 @@ TAROT_FLOW: dict[int, str | None] = {}
 TAROT_THEME: dict[int, str] = {}
 USER_STATE_LAST_ACTIVE: dict[int, datetime] = {}
 ARISA_START_VARIANTS: dict[int, str] = {}
+ARISA_BASE_NEED_TYPE: dict[int, str] = {}
+DEFAULT_ARISA_NEED_TYPE = "calm"
+ARISA_NEED_TYPE_TEMPERATURE = {
+    "calm": 0.4,
+    "clarify": 0.6,
+    "tease": 0.9,
+}
 DEFAULT_THEME = "life"
 
 TAROT_THEME_LABELS: dict[str, str] = {
@@ -1403,6 +1411,8 @@ def build_arisa_messages(
     lang: str | None = "ja",
     paid: bool = False,
     first_paid_turn: bool = False,
+    need_type: str = DEFAULT_ARISA_NEED_TYPE,
+    calling: str = "あなた",
 ) -> list[dict[str, str]]:
     """Arisaモードの system prompt を組み立てる。"""
     lang_code = normalize_lang(lang)
@@ -1411,7 +1421,9 @@ def build_arisa_messages(
     internal_flags = (
         f'MODE: "{ "PAID" if paid else "FREE" }"\n'
         f'FIRST_PAID_TURN: "{ "true" if first_paid_turn else "false" }"\n'
-        f'LANG: "{lang_code}"'
+        f'LANG: "{lang_code}"\n'
+        f'NEED_TYPE: "{need_type}"\n'
+        f'CALLING: "{calling}"'
     )
     parts = [system_prompt]
     if boundary_lines:
@@ -1424,20 +1436,21 @@ def build_arisa_messages(
 
 
 async def call_openai_with_retry(
-    messages: Iterable[dict[str, str]], *, lang: str | None = "ja"
+    messages: Iterable[dict[str, str]], *, lang: str | None = "ja", temperature: float | None = None
 ) -> tuple[str, bool]:
     prepared_messages = list(messages)
     max_attempts = 3
     base_delay = 1.5
     lang_code = normalize_lang(lang)
+    request_kwargs = {"model": OPENAI_MODEL, "messages": prepared_messages}
+    if temperature is not None:
+        request_kwargs["temperature"] = temperature
 
     for attempt in range(1, max_attempts + 1):
         try:
             completion = await asyncio.get_running_loop().run_in_executor(
                 None,
-                lambda: client.chat.completions.create(
-                    model=OPENAI_MODEL, messages=prepared_messages
-                ),
+                lambda: client.chat.completions.create(**request_kwargs),
             )
             answer = completion.choices[0].message.content
             return postprocess_llm_text(answer, lang=lang_code), False
@@ -1482,20 +1495,21 @@ async def call_openai_with_retry(
 
 
 async def call_openai_with_retry_and_usage(
-    messages: Iterable[dict[str, str]], *, lang: str | None = "ja"
+    messages: Iterable[dict[str, str]], *, lang: str | None = "ja", temperature: float | None = None
 ) -> tuple[str, bool, int | None]:
     prepared_messages = list(messages)
     max_attempts = 3
     base_delay = 1.5
     lang_code = normalize_lang(lang)
+    request_kwargs = {"model": OPENAI_MODEL, "messages": prepared_messages}
+    if temperature is not None:
+        request_kwargs["temperature"] = temperature
 
     for attempt in range(1, max_attempts + 1):
         try:
             completion = await asyncio.get_running_loop().run_in_executor(
                 None,
-                lambda: client.chat.completions.create(
-                    model=OPENAI_MODEL, messages=prepared_messages
-                ),
+                lambda: client.chat.completions.create(**request_kwargs),
             )
             answer = completion.choices[0].message.content
             usage = getattr(completion, "usage", None)
@@ -4321,6 +4335,46 @@ def _is_arisa_tarot_trigger(text: str) -> bool:
     return any(keyword in lowered for keyword in ARISA_TAROT_KEYWORDS)
 
 
+def classify_need(text: str) -> str | None:
+    if not text:
+        return None
+    candidates = [
+        ("安心", "calm"),
+        ("刺激", "tease"),
+        ("整理", "clarify"),
+    ]
+    hits: list[tuple[int, str]] = []
+    for keyword, need_type in candidates:
+        index = text.find(keyword)
+        if index >= 0:
+            hits.append((index, need_type))
+    if not hits:
+        return None
+    hits.sort(key=lambda item: item[0])
+    return hits[0][1]
+
+
+def resolve_arisa_need_type(base_need_type: str | None, user_text: str) -> str:
+    override = classify_need(user_text)
+    if override:
+        return override
+    if base_need_type in ARISA_NEED_TYPE_TEMPERATURE:
+        return base_need_type
+    return DEFAULT_ARISA_NEED_TYPE
+
+
+def get_user_calling(*, paid: bool, name: str | None) -> str:
+    if paid and name:
+        cleaned = name.strip()
+        if cleaned:
+            return f"{cleaned}さん"
+    return "あなた"
+
+
+def arisa_temperature_for_need(need_type: str) -> float:
+    return ARISA_NEED_TYPE_TEMPERATURE.get(need_type, ARISA_NEED_TYPE_TEMPERATURE[DEFAULT_ARISA_NEED_TYPE])
+
+
 def _arisa_block_notice(lang: str | None = "ja") -> str:
     lang_code = normalize_lang(lang)
     return t(lang_code, "ARISA_BLOCK_NOTICE")
@@ -4376,6 +4430,10 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
         )
         return
     paid_user = is_arisa_paid_user(user_id, user=user, now=now)
+    base_need_type = ARISA_BASE_NEED_TYPE.get(user_id)
+    need_type = resolve_arisa_need_type(base_need_type, user_query)
+    calling = get_user_calling(paid=paid_user, name=None)
+    temperature = arisa_temperature_for_need(need_type)
 
     logger.info(
         "Handling Arisa message",
@@ -4393,8 +4451,15 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
     try:
         openai_start = perf_counter()
         answer, fatal, token_usage = await call_openai_with_retry_and_usage(
-            build_arisa_messages(user_query, lang=lang, paid=paid_user),
+            build_arisa_messages(
+                user_query,
+                lang=lang,
+                paid=paid_user,
+                need_type=need_type,
+                calling=calling,
+            ),
             lang=lang,
+            temperature=temperature,
         )
         openai_latency_ms = (perf_counter() - openai_start) * 1000
         if fatal:
@@ -4787,6 +4852,8 @@ async def arisa_text(message: Message) -> None:
     now = utcnow()
 
     if action == "love":
+        if user_id is not None:
+            ARISA_BASE_NEED_TYPE[user_id] = DEFAULT_ARISA_NEED_TYPE
         await message.answer(
             get_arisa_prompt("ARISA_LOVE_PROMPTS", "ARISA_LOVE_PROMPT", lang=lang),
             reply_markup=build_arisa_menu(user_id),
@@ -4804,6 +4871,8 @@ async def arisa_text(message: Message) -> None:
                 reply_markup=build_store_keyboard(lang=lang),
             )
             return
+        if user_id is not None:
+            ARISA_BASE_NEED_TYPE[user_id] = "tease"
         await message.answer(
             get_arisa_prompt("ARISA_SEXY_PROMPTS", "ARISA_SEXY_PROMPT", lang=lang),
             reply_markup=build_arisa_menu(user_id),
