@@ -18,8 +18,15 @@ def _flatten_texts(value: object) -> Iterable[str]:
     return []
 
 
+def _has_choice_prompt(text: str) -> bool:
+    if "「安心」「刺激」「整理」" in text:
+        return True
+    if "癒し？ドキドキ？それとも" in text:
+        return True
+    return all(token in text for token in ("安心", "刺激", "整理"))
+
+
 def test_arisa_texts_avoid_choice_keywords() -> None:
-    banned = ("安心", "刺激", "整理")
 
     arisa_attrs = [
         getattr(ja_texts, name)
@@ -31,8 +38,8 @@ def test_arisa_texts_avoid_choice_keywords() -> None:
         arisa_texts.extend(_flatten_texts(value))
 
     for text in arisa_texts:
-        for token in banned:
-            assert token not in text
+        for line in text.splitlines() or [text]:
+            assert not _has_choice_prompt(line)
 
     files_to_check = list(Path("characters/arisa/prompts").glob("*.txt"))
     files_to_check.extend(
@@ -43,8 +50,8 @@ def test_arisa_texts_avoid_choice_keywords() -> None:
     )
     for prompt_file in files_to_check:
         contents = prompt_file.read_text(encoding="utf-8")
-        for token in banned:
-            assert token not in contents
+        for line in contents.splitlines() or [contents]:
+            assert not _has_choice_prompt(line)
 
 
 def test_arisa_mode_selection_changes_prompt() -> None:

@@ -11,23 +11,10 @@ from bot.arisa_prompts import build_system_prompt
 from bot.texts.i18n import normalize_lang
 from core.prompts import get_consult_system_prompt
 
-DEFAULT_ARISA_NEED_TYPE = "default"
-
-ARISA_NEED_TYPE_TEMPERATURE = {
-    "default": 0.72,
-}
-
-ARISA_NEED_TYPE_TOP_P = {
-    "default": 0.9,
-}
-
-ARISA_NEED_TYPE_PRESENCE = {
-    "default": 0.2,
-}
-
-ARISA_NEED_TYPE_FREQUENCY = {
-    "default": 0.15,
-}
+ARISA_DEFAULT_TEMPERATURE = 0.72
+ARISA_DEFAULT_TOP_P = 0.9
+ARISA_DEFAULT_PRESENCE = 0.2
+ARISA_DEFAULT_FREQUENCY = 0.15
 
 _ARISA_DIR = Path(__file__).resolve().parents[1] / "characters" / "arisa"
 
@@ -66,24 +53,17 @@ def sanitize_arisa_reply(text: str) -> str:
     return sanitized or text.strip()
 
 
-def arisa_temperature_for_need(need_type: str) -> float:
-    return ARISA_NEED_TYPE_TEMPERATURE.get(
-        need_type, ARISA_NEED_TYPE_TEMPERATURE[DEFAULT_ARISA_NEED_TYPE]
-    )
-
-
 def arisa_generation_params(
-    need_type: str,
     *,
     provider: str | None = None,
 ) -> tuple[float, dict[str, Any]]:
-    temperature = arisa_temperature_for_need(need_type)
+    temperature = ARISA_DEFAULT_TEMPERATURE
     overrides: dict[str, Any] = {}
     if provider in {"openai", "gemini"}:
-        overrides["top_p"] = ARISA_NEED_TYPE_TOP_P.get(need_type, 0.9)
+        overrides["top_p"] = ARISA_DEFAULT_TOP_P
     if provider == "openai":
-        overrides["presence_penalty"] = ARISA_NEED_TYPE_PRESENCE.get(need_type, 0.2)
-        overrides["frequency_penalty"] = ARISA_NEED_TYPE_FREQUENCY.get(need_type, 0.15)
+        overrides["presence_penalty"] = ARISA_DEFAULT_PRESENCE
+        overrides["frequency_penalty"] = ARISA_DEFAULT_FREQUENCY
     return temperature, overrides
 
 
@@ -95,35 +75,27 @@ def _load_arisa_fallbacks_ja() -> tuple[str, ...]:
     return tuple(line for line in lines if line and not line.startswith("#"))
 
 
-def _arisa_fallback_variants(lang: str) -> dict[str, tuple[str, ...]]:
+def _arisa_fallback_variants(lang: str) -> tuple[str, ...]:
     if lang == "en":
-        return {
-            "default": (
-                "…Sorry, my words tangled for a second. Are you okay right now?",
-                "…Hold on. I want to be gentle with you. What’s the one thing you want me to say first?",
-                "…I stumbled a bit. Tell me what you want most from me right now.",
-            ),
-        }
+        return (
+            "…Sorry, my words tangled for a second. Are you okay right now?",
+            "…Hold on. I want to be gentle with you. What’s the one thing you want me to say first?",
+            "…I stumbled a bit. Tell me what you want most from me right now.",
+        )
     if lang == "pt":
-        return {
-            "default": (
-                "…Desculpa, minhas palavras se embolaram. Você tá bem agora?",
-                "…Espera. Quero cuidar de você direitinho. O que você quer ouvir primeiro?",
-                "…Eu tropecei um pouco. Me diz o que você quer mais de mim agora.",
-            ),
-        }
+        return (
+            "…Desculpa, minhas palavras se embolaram. Você tá bem agora?",
+            "…Espera. Quero cuidar de você direitinho. O que você quer ouvir primeiro?",
+            "…Eu tropecei um pouco. Me diz o que você quer mais de mim agora.",
+        )
     fallbacks_ja = _load_arisa_fallbacks_ja()
     if fallbacks_ja:
-        return {
-            "default": fallbacks_ja,
-        }
-    return {
-        "default": (
-            "…ごめん、言葉がうまく出ない。あなた、いまいちばん欲しいのは何？",
-            "…今はちゃんと寄り添いたい。あなた、今の気分を一言で教えて？",
-            "…言い直すね。あなた、今いちばん気になってることって何？",
-        ),
-    }
+        return fallbacks_ja
+    return (
+        "…ごめん、言葉がうまく出ない。あなた、いまいちばん欲しいのは何？",
+        "…今はちゃんと寄り添いたい。あなた、今の気分を一言で教えて？",
+        "…言い直すね。あなた、今いちばん気になってることって何？",
+    )
 
 
 def _select_fallback_variant(
@@ -152,15 +124,13 @@ def _select_fallback_variant(
 def get_arisa_fallback_message(
     *,
     lang: str | None,
-    need_type: str,
     calling: str,
     user_id: int | None,
     message_id: int | None,
     update_id: int | None = None,
 ) -> str:
     lang_code = normalize_lang(lang)
-    variants_by_need = _arisa_fallback_variants(lang_code)
-    variants = variants_by_need.get(need_type) or variants_by_need.get("default", ())
+    variants = _arisa_fallback_variants(lang_code)
     message = _select_fallback_variant(
         variants,
         user_id=user_id,
