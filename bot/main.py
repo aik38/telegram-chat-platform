@@ -5,9 +5,12 @@ import math
 import os
 import random
 import re
+import subprocess
+import sys
 import unicodedata
 from collections import deque
 from datetime import datetime, time, timedelta, timezone
+from pathlib import Path
 from urllib.parse import urlencode
 from time import monotonic, perf_counter
 from typing import Any, Awaitable, Callable, Iterable, Sequence
@@ -52,6 +55,7 @@ from core.admin import (
 )
 from core.config import AppConfig, load_config
 from core.env_utils import infer_provider, mask_secret, validate_model_base_url
+from core.instance_lock import acquire_bot_lock
 from core.llm_client import get_openai_base_url, make_openai_client
 from core.llm_params import build_chat_kwargs
 from core.db import (
@@ -166,6 +170,36 @@ def _get_env_model(name: str, fallback: str) -> str:
         return fallback
     raw = raw.strip()
     return raw or fallback
+
+
+def _get_git_sha() -> str:
+    repo_root = Path(__file__).resolve().parents[1]
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return "unknown"
+    if result.returncode != 0:
+        return "unknown"
+    sha = result.stdout.strip()
+    return sha or "unknown"
+
+
+def _log_startup_fingerprint(*, provider: str, dotenv_file: Path, git_sha: str) -> None:
+    logger.info(
+        "Startup fingerprint -> git_sha=%s pid=%s provider=%s dotenv_file=%s python=%s cwd=%s",
+        git_sha,
+        os.getpid(),
+        provider,
+        dotenv_file,
+        sys.executable,
+        os.getcwd(),
+    )
 
 
 def _apply_runtime_config() -> None:
@@ -5393,6 +5427,12 @@ async def main() -> None:
     provider = infer_provider(openai_base_url)
     openai_base_url_label = openai_base_url or "default"
     dotenv_file = os.getenv("DOTENV_FILE") or ".env"
+    dotenv_path = (
+        DOTENV_PATH
+        if isinstance(DOTENV_PATH, Path)
+        else Path(dotenv_file).expanduser()
+    ).resolve()
+    git_sha = _get_git_sha()
     # Example: OpenAI runtime config -> base_url=https://api.openai.com model=gpt-4o-mini line_model=gpt-4o-mini provider=openai
     logger.info(
         "OpenAI runtime config -> base_url=%s model=%s line_model=%s provider=%s",
@@ -5400,6 +5440,11 @@ async def main() -> None:
         OPENAI_MODEL,
         LINE_OPENAI_MODEL,
         provider,
+    )
+    _log_startup_fingerprint(
+        provider=provider,
+        dotenv_file=dotenv_path,
+        git_sha=git_sha,
     )
     logger.info(
         "Environment source -> DOTENV_FILE=%s dotenv_path=%s",
@@ -5428,13 +5473,25 @@ async def main() -> None:
         dp.include_router(tarot_router)
     if bot is None:
         raise RuntimeError("Bot is not initialized.")
+    app_name = "arisa" if BOT_MODE == "arisa" else "tarot"
+    lock_handle = acquire_bot_lock(
+        app=app_name,
+        token=CONFIG.telegram_bot_token if CONFIG else "",
+        provider=provider,
+        dotenv_file=str(dotenv_path),
+    )
     me = await bot.get_me()
+    lock_handle.update(
+        bot_username=getattr(me, "username", None),
+        bot_id=getattr(me, "id", None),
+    )
     logger.info(
         "Bot startup info",
         extra={
             "mode": "startup",
             "bot_mode": BOT_MODE,
             "bot_username": getattr(me, "username", None),
+            "bot_id": getattr(me, "id", None),
             "character": CHARACTER or None,
             "dotenv_file": str(DOTENV_PATH),
             "paywall_enabled": PAYWALL_ENABLED,
