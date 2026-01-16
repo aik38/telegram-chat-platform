@@ -3,20 +3,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Set
 
+from core.admin import parse_admin_ids
 from core.env_utils import load_environment
-
-
-def _parse_admin_ids(raw: str) -> Set[int]:
-    values: set[int] = set()
-    for value in (raw or "").split(","):
-        candidate = value.strip()
-        if not candidate:
-            continue
-        try:
-            values.add(int(candidate))
-        except ValueError:
-            continue
-    return values
 
 
 def _parse_float_env(name: str, default: float) -> float:
@@ -49,7 +37,7 @@ def load_config() -> AppConfig:
     telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
     openai_api_key = os.getenv("OPENAI_API_KEY")
     support_email = os.getenv("SUPPORT_EMAIL", "hasegawaarisa1@gmail.com")
-    admin_user_ids = _parse_admin_ids(os.getenv("ADMIN_USER_IDS", ""))
+    admin_user_ids = parse_admin_ids(os.getenv("ADMIN_USER_IDS", ""))
     throttle_message_interval_sec = _parse_float_env(
         "THROTTLE_MESSAGE_INTERVAL_SEC", 1.2
     )

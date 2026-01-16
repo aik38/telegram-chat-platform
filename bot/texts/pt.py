@@ -103,11 +103,13 @@ TEXTS = {
     "ARISA_SEXY_LOCKED_CTA": "Veja detalhes em /store.",
     "ARISA_STATUS_TITLE": "📊 Seu status atual.",
     "ARISA_STATUS_CREDITS_LINE": "• Tickets restantes: ~{credits} mensagens",
+    "ARISA_STATUS_ADMIN_LINE": "• Admin: ON",
     "ARISA_STATUS_TRIAL_LINE": "• Teste: {trial} mensagens restantes",
     "ARISA_STATUS_PASS_ACTIVE": "• Passe: {pass_label} (restam hoje: {remaining})",
     "ARISA_STATUS_PASS_NONE": "• Passe: nenhum",
     "ARISA_STATUS_PASS_TESTER": "Passe de 30 dias",
     "ARISA_STATUS_SEXY_UNLOCKED": "• Sexy: liberado",
+    "ARISA_STATUS_SEXY_NEEDS_CREDITS": "• Sexy: adicione tickets em /store",
     "ARISA_STATUS_SEXY_LOCKED": "• Sexy: bloqueado (libera após a primeira compra)",
     "ARISA_STATUS_NOTE_TOKENS": (
         "A quantidade de mensagens é aproximada e pode variar conforme o tamanho da resposta."

@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Set
 
+from core.admin import get_admin_user_ids
 from core.db import UserRecord, get_user, has_active_pass
 
 
@@ -36,10 +37,6 @@ def get_paywall_enabled() -> bool:
 
 def get_premium_user_ids() -> set[int]:
     return _parse_int_set(os.getenv("PREMIUM_USER_IDS"))
-
-
-def get_admin_user_ids() -> set[int]:
-    return _parse_int_set(os.getenv("ADMIN_USER_IDS"))
 
 
 def is_premium_user(user_id: int | None, *, now: datetime | None = None) -> bool:

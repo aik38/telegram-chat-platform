@@ -44,6 +44,12 @@ from openai import (
     RateLimitError,
 )
 
+from core.admin import (
+    configure_admin_user_ids,
+    get_admin_user_ids,
+    get_admin_user_ids_raw,
+    is_admin_user,
+)
 from core.config import AppConfig, load_config
 from core.env_utils import infer_provider, mask_secret, validate_model_base_url
 from core.llm_client import get_openai_base_url, make_openai_client
@@ -86,7 +92,6 @@ from core.db import (
 from core.monetization import (
     effective_has_pass,
     effective_pass_expires_at,
-    get_admin_user_ids,
     get_paywall_enabled,
     get_user_with_default,
 )
@@ -120,8 +125,12 @@ from bot.arisa_runtime import (
     build_arisa_messages,
     get_arisa_fallback_message,
     get_user_calling,
-    resolve_arisa_need_type,
     sanitize_arisa_reply,
+)
+from bot.paywall import (
+    arisa_chat_allowed,
+    arisa_sexy_unlocked,
+    arisa_should_consume_credits,
 )
 from bot.texts.ja import HELP_TEXT_TEMPLATE
 
@@ -136,7 +145,6 @@ CONFIG: AppConfig | None = None
 DOTENV_PATH = None
 CHARACTER = ""
 BOT_MODE = "default"
-ADMIN_USER_IDS: set[int] = get_admin_user_ids()
 SUPPORT_EMAIL = "hasegawaarisa1@gmail.com"
 THROTTLE_MESSAGE_INTERVAL_SEC = 1.2
 THROTTLE_CALLBACK_INTERVAL_SEC = 0.8
@@ -161,7 +169,6 @@ def _get_env_model(name: str, fallback: str) -> str:
 
 
 def _apply_runtime_config() -> None:
-    global ADMIN_USER_IDS
     global BOT_MODE
     global CHARACTER
     global CONFIG
@@ -184,7 +191,7 @@ def _apply_runtime_config() -> None:
 
     CONFIG = load_config()
     DOTENV_PATH = CONFIG.dotenv_path
-    ADMIN_USER_IDS = CONFIG.admin_user_ids
+    configure_admin_user_ids(CONFIG.admin_user_ids)
     SUPPORT_EMAIL = CONFIG.support_email
     THROTTLE_MESSAGE_INTERVAL_SEC = CONFIG.throttle_message_interval_sec
     THROTTLE_CALLBACK_INTERVAL_SEC = CONFIG.throttle_callback_interval_sec
@@ -226,12 +233,6 @@ def _apply_runtime_config() -> None:
     ARISA_PASS_PRODUCTS["ARISA_PASS_30D"]["daily_limit"] = PASS_30D_DAILY_LIMIT
 
 
-def _get_runtime_admin_ids() -> set[int]:
-    if CONFIG:
-        return set(CONFIG.admin_user_ids)
-    return get_admin_user_ids()
-
-
 def _mask_identifier(value: int | str | None) -> str:
     if value is None:
         return "none"
@@ -260,8 +261,10 @@ def _log_access_snapshot(
     is_paid: bool,
     pass_active: bool | None = None,
 ) -> None:
-    raw_admin_ids = os.getenv("ADMIN_USER_IDS", "")
-    parsed_admin_ids = ",".join(_mask_identifier(value) for value in sorted(_get_runtime_admin_ids()))
+    raw_admin_ids = get_admin_user_ids_raw()
+    parsed_admin_ids = ",".join(
+        _mask_identifier(value) for value in sorted(get_admin_user_ids())
+    )
     logger.info(
         "Access snapshot -> admin_ids_raw=%s admin_ids_parsed=%s user_id=%s is_admin=%s is_paid=%s pass_active=%s",
         _mask_admin_ids(raw_admin_ids),
@@ -315,7 +318,6 @@ TAROT_FLOW: dict[int, str | None] = {}
 TAROT_THEME: dict[int, str] = {}
 USER_STATE_LAST_ACTIVE: dict[int, datetime] = {}
 ARISA_START_VARIANTS: dict[int, str] = {}
-ARISA_BASE_NEED_TYPE: dict[int, str] = {}
 DEFAULT_THEME = "life"
 
 TAROT_THEME_LABELS: dict[str, str] = {
@@ -2396,12 +2398,6 @@ def is_paid_spread(spread: Spread) -> bool:
     return spread.id in PAID_SPREAD_IDS
 
 
-def is_admin_user(user_id: int | None) -> bool:
-    if user_id is None:
-        return False
-    return user_id in _get_runtime_admin_ids()
-
-
 def get_bot_display_name() -> str:
     return "akolasia_tarot_bot"
 
@@ -2740,10 +2736,19 @@ def format_arisa_status(
         user.user_id, user=user, now=now
     )
     remaining_today = _arisa_pass_remaining(user, now=now) if pass_active else 0
+    available_credits = _arisa_available_credits(user, now=now)
+    sexy_unlocked = arisa_sexy_unlocked(
+        paid_user=paid_user,
+        available_credits=available_credits,
+        user_id=user.user_id,
+        admin_override=admin_mode,
+    )
     lines = [
         t(lang_code, "ARISA_STATUS_TITLE"),
         t(lang_code, "ARISA_STATUS_CREDITS_LINE", credits=user.arisa_credits),
     ]
+    if admin_mode:
+        lines.append(t(lang_code, "ARISA_STATUS_ADMIN_LINE"))
     if user.arisa_trial_remaining > 0 and not pass_active:
         lines.append(
             t(lang_code, "ARISA_STATUS_TRIAL_LINE", trial=user.arisa_trial_remaining)
@@ -2761,12 +2766,12 @@ def format_arisa_status(
         )
     else:
         lines.append(t(lang_code, "ARISA_STATUS_PASS_NONE"))
-    lines.append(
-        t(
-            lang_code,
-            "ARISA_STATUS_SEXY_UNLOCKED" if paid_user else "ARISA_STATUS_SEXY_LOCKED",
-        )
-    )
+    if sexy_unlocked:
+        lines.append(t(lang_code, "ARISA_STATUS_SEXY_UNLOCKED"))
+    elif paid_user:
+        lines.append(t(lang_code, "ARISA_STATUS_SEXY_NEEDS_CREDITS"))
+    else:
+        lines.append(t(lang_code, "ARISA_STATUS_SEXY_LOCKED"))
     lines.append(
         t(
             lang_code,
@@ -4695,7 +4700,20 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
             t(lang, "ARISA_USER_LOAD_ERROR"), reply_markup=build_arisa_menu(user_id)
         )
         return
-    if _arisa_available_credits(user, now=now) <= 0:
+    available_credits = _arisa_available_credits(user, now=now)
+    admin_mode = is_admin_user(user_id)
+    if not arisa_chat_allowed(user_id, available_credits, admin_override=admin_mode):
+        logger.info(
+            "Arisa paywall denied",
+            extra={
+                "from_user_id": getattr(message.from_user, "id", None),
+                "chat_id": getattr(getattr(message, "chat", None), "id", None),
+                "user_id": user_id,
+                "is_admin": admin_mode,
+                "admin_user_ids_raw": get_admin_user_ids_raw(),
+                "admin_user_ids_parsed": sorted(get_admin_user_ids()),
+            },
+        )
         await message.answer(
             t(lang, "ARISA_OUT_OF_CREDITS"),
             reply_markup=build_store_keyboard(lang=lang),
@@ -4704,8 +4722,7 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
     paid_user, pass_active, _paid_subscription_flag = resolve_arisa_paid_state(
         user_id, user=user, now=now
     )
-    base_need_type = ARISA_BASE_NEED_TYPE.get(user_id)
-    need_type = resolve_arisa_need_type(base_need_type, user_query)
+    need_type = DEFAULT_ARISA_NEED_TYPE
     calling = get_user_calling(paid=paid_user, known_name=None)
     provider = LLM_PROVIDER or infer_provider(get_openai_base_url())
     temperature, request_overrides = arisa_generation_params(need_type, provider=provider)
@@ -4757,12 +4774,13 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
             return
         answer = sanitize_arisa_reply(answer)
         credits_used = _arisa_credits_used(token_usage)
-        credit_sources, credit_shortfall = _consume_arisa_credits(
-            user_id,
-            user,
-            credits_used=credits_used,
-            now=now,
-        )
+        if arisa_should_consume_credits(user_id, admin_override=admin_mode):
+            credit_sources, credit_shortfall = _consume_arisa_credits(
+                user_id,
+                user,
+                credits_used=credits_used,
+                now=now,
+            )
         await message.answer(
             answer,
             reply_markup=build_arisa_menu(user_id),
@@ -5161,15 +5179,23 @@ async def arisa_text(message: Message) -> None:
     now = utcnow()
 
     if action == "love":
-        if user_id is not None:
-            ARISA_BASE_NEED_TYPE[user_id] = "calm"
         await message.answer(
             get_arisa_prompt("ARISA_LOVE_PROMPTS", "ARISA_LOVE_PROMPT", lang=lang),
             reply_markup=build_arisa_menu(user_id),
         )
         return
     if action == "sexy":
-        if user_id is None or not is_arisa_paid_user(user_id, now=now):
+        if user_id is None:
+            await message.answer(
+                t(lang, "USER_INFO_MISSING"),
+            )
+            return
+        user = get_user_with_default(user_id, now=now) or ensure_user(user_id, now=now)
+        paid_user = is_arisa_paid_user(user_id, user=user, now=now)
+        available_credits = _arisa_available_credits(user, now=now)
+        if not arisa_sexy_unlocked(
+            paid_user=paid_user, available_credits=available_credits, user_id=user_id
+        ):
             await message.answer(
                 "\n".join(
                     [
@@ -5180,8 +5206,6 @@ async def arisa_text(message: Message) -> None:
                 reply_markup=build_store_keyboard(lang=lang),
             )
             return
-        if user_id is not None:
-            ARISA_BASE_NEED_TYPE[user_id] = "tease"
         await message.answer(
             get_arisa_prompt("ARISA_SEXY_PROMPTS", "ARISA_SEXY_PROMPT", lang=lang),
             reply_markup=build_arisa_menu(user_id),
@@ -5391,7 +5415,7 @@ async def main() -> None:
         "Starting akolasia_tarot_bot",
         extra={
             "mode": "startup",
-            "admin_ids_count": len(_get_runtime_admin_ids()),
+            "admin_ids_count": len(get_admin_user_ids()),
             "paywall_enabled": PAYWALL_ENABLED,
             "polling": True,
             "character": CHARACTER or None,
