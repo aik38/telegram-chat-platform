@@ -61,6 +61,7 @@ powershell -ExecutionPolicy Bypass -File scripts/run_line.ps1 -DotenvFile .env.o
 
 - 同じ `TELEGRAM_BOT_TOKEN` で複数プロセスが `getUpdates` を実行すると `TelegramConflictError` が発生します。
 - 起動中の Bot を停止してから再起動してください（同時起動しません）。
+- Bot 起動時に `.locks/` 配下へロックファイルを作成し、多重起動は自動で停止します。前回クラッシュでロックが残った場合は `.locks/` を削除してから再起動してください。
 
 ### git stash の引用符（PowerShell）
 

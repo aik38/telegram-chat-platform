@@ -30,6 +30,9 @@ shortcuts_dump*.txt
 # SQLite (local runtime)
 db/*.db
 
+# Bot instance locks
+.locks/
+
 # Test / coverage cache
 .pytest_cache/
 .coverage
