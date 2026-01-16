@@ -46,8 +46,8 @@ def load_config() -> AppConfig:
     )
     one_message_tokens = int(os.getenv("ONE_MESSAGE_TOKENS", "600"))
     trial_free_credits = int(os.getenv("TRIAL_FREE_CREDITS", "10"))
-    pass_7d_daily_limit = int(os.getenv("PASS_7D_DAILY_LIMIT", "30"))
-    pass_30d_daily_limit = int(os.getenv("PASS_30D_DAILY_LIMIT", "50"))
+    pass_7d_daily_limit = int(os.getenv("PASS_7D_DAILY_LIMIT", "25"))
+    pass_30d_daily_limit = int(os.getenv("PASS_30D_DAILY_LIMIT", "30"))
 
     if not telegram_bot_token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is not set in environment or .env")

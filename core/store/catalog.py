@@ -82,15 +82,15 @@ PRODUCTS: tuple[Product, ...] = (
     Product(
         sku="ARISA_PASS_7D",
         title="7日パス",
-        description="1日上限30通の7日パスです。",
-        price_stars=1190,
+        description="1日上限25通の7日パスです。",
+        price_stars=990,
         kind="pass",
     ),
     Product(
         sku="ARISA_PASS_30D",
         title="30日パス",
-        description="1日上限50通の30日パスです。",
-        price_stars=5990,
+        description="1日上限30通の30日パスです。",
+        price_stars=3990,
         kind="pass",
     ),
 )

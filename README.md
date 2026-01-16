@@ -193,6 +193,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\telegram-chat-platform
   - 例: RawDataBot (`@raw_data_bot` など) で `/start` し、表示される `id` の値を控える。
 - `ADMIN_USER_IDS` はカンマ区切りで複数指定できます。
   - 例: `1357890414,123456789`
+- 管理者アカウントは検証用途（課金や上限の確認）で利用する想定です。
 - PowerShell での起動例:
 
   ```powershell

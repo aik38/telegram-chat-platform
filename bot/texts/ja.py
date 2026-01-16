@@ -128,7 +128,7 @@ ARISA_STORE_INTRO_TEXT = (
     "恋愛/雑談トーク用のチケットとパスです。\n"
     "ライト会話チケット（100⭐️/約15通、初回購入は+15通ボーナスで合計30通相当）\n"
     "しっかり会話チケット（300⭐️/約50通）／じっくり会話チケット（500⭐️/約100通）\n"
-    "7日パス（1日上限30通）／30日パス（1日上限50通）\n"
+        "7日パス（1日上限25通）／30日パス（1日上限30通）\n"
     "※通数は目安。会話の長さにより前後します。\n"
 )
 ARISA_OUT_OF_CREDITS = (
@@ -232,10 +232,10 @@ ARISA_PRODUCT_ARISA_CREDIT_300_TITLE = "しっかり会話チケット（約50�
 ARISA_PRODUCT_ARISA_CREDIT_300_DESCRIPTION = "300⭐️の会話チケットです。"
 ARISA_PRODUCT_ARISA_CREDIT_500_TITLE = "じっくり会話チケット（約100通）"
 ARISA_PRODUCT_ARISA_CREDIT_500_DESCRIPTION = "500⭐️の会話チケットです。"
-ARISA_PRODUCT_ARISA_PASS_7D_TITLE = "7日パス（1日上限30通）"
-ARISA_PRODUCT_ARISA_PASS_7D_DESCRIPTION = "7日間、1日30通までの会話パスです。"
-ARISA_PRODUCT_ARISA_PASS_30D_TITLE = "30日パス（1日上限50通）"
-ARISA_PRODUCT_ARISA_PASS_30D_DESCRIPTION = "30日間、1日50通までの会話パスです。"
+ARISA_PRODUCT_ARISA_PASS_7D_TITLE = "7日パス（1日上限25通）"
+ARISA_PRODUCT_ARISA_PASS_7D_DESCRIPTION = "7日間、1日25通までの会話パスです。"
+ARISA_PRODUCT_ARISA_PASS_30D_TITLE = "30日パス（1日上限30通）"
+ARISA_PRODUCT_ARISA_PASS_30D_DESCRIPTION = "30日間、1日30通までの会話パスです。"
 PASS_EXTENDED_TEXT = "有効期限を更新しました。"
 UNLOCK_TICKET_ADDED = "{product}を追加しました。現在の残り枚数は {balance} 枚です。"
 UNLOCK_PASS_GRANTED = "{duration}を付与しました。\n有効期限: {until_text}{remaining_hint}"
