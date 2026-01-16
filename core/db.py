@@ -27,6 +27,7 @@ class UserRecord:
     first_seen: datetime
     pass_until: datetime | None
     premium_until: datetime | None
+    arisa_mode: str | None
     tickets_3: int
     tickets_7: int
     tickets_10: int
@@ -135,6 +136,7 @@ def init_db() -> None:
                 created_at TEXT,
                 premium_until TEXT,
                 pass_until TEXT,
+                arisa_mode TEXT,
                 arisa_pass_until TEXT,
                 arisa_pass_daily_limit INT,
                 arisa_pass_used_today INT,
@@ -224,6 +226,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE users ADD COLUMN terms_accepted_at TEXT")
         if not _column_exists(conn, "users", "pass_until"):
             conn.execute("ALTER TABLE users ADD COLUMN pass_until TEXT")
+        if not _column_exists(conn, "users", "arisa_mode"):
+            conn.execute("ALTER TABLE users ADD COLUMN arisa_mode TEXT")
         if not _column_exists(conn, "users", "arisa_pass_until"):
             conn.execute("ALTER TABLE users ADD COLUMN arisa_pass_until TEXT")
         if not _column_exists(conn, "users", "arisa_pass_daily_limit"):
@@ -322,6 +326,7 @@ def ensure_user(user_id: int, *, now: datetime | None = None) -> UserRecord:
                 created_at,
                 premium_until,
                 pass_until,
+                arisa_mode,
                 arisa_pass_until,
                 arisa_pass_daily_limit,
                 arisa_pass_used_today,
@@ -340,7 +345,7 @@ def ensure_user(user_id: int, *, now: datetime | None = None) -> UserRecord:
                 last_general_chat_block_notice_at
             , lang
             )
-            VALUES (?, ?, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, ?, ?, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL)
+            VALUES (?, ?, NULL, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, ?, ?, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL)
             """,
             (user_id, now.isoformat(), now.isoformat(), usage_today.isoformat()),
         )
@@ -350,6 +355,7 @@ def ensure_user(user_id: int, *, now: datetime | None = None) -> UserRecord:
             first_seen=now,
             pass_until=None,
             premium_until=None,
+            arisa_mode=None,
             tickets_3=0,
             tickets_7=0,
             tickets_10=0,
@@ -389,6 +395,27 @@ def get_user_lang(user_id: int) -> str | None:
         return None
     lang_raw = row["lang"]
     return _normalize_lang(lang_raw) if lang_raw else None
+
+
+def get_arisa_mode(user_id: int) -> str | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT arisa_mode FROM users WHERE user_id = ?", (user_id,)
+        ).fetchone()
+    if not row:
+        return None
+    return row["arisa_mode"]
+
+
+def set_arisa_mode(user_id: int, mode: str | None, *, now: datetime | None = None) -> None:
+    now = now or datetime.now(timezone.utc)
+    ensure_user(user_id, now=now)
+    normalized = mode.strip().lower() if mode else None
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE users SET arisa_mode = ? WHERE user_id = ?",
+            (normalized, user_id),
+        )
 
 
 def set_user_lang(user_id: int, lang: str, *, now: datetime | None = None) -> str:
@@ -576,10 +603,11 @@ def check_db_health() -> tuple[bool, list[str]]:
                     "user_id",
                     "created_at",
                     "premium_until",
-                    "pass_until",
-                    "arisa_pass_until",
-                    "arisa_pass_daily_limit",
-                    "arisa_pass_used_today",
+                "pass_until",
+                "arisa_mode",
+                "arisa_pass_until",
+                "arisa_pass_daily_limit",
+                "arisa_pass_used_today",
                     "arisa_pass_usage_date",
                     "arisa_credits",
                     "arisa_trial_remaining",
@@ -691,6 +719,7 @@ def _row_to_user(row: sqlite3.Row) -> UserRecord:
         first_seen=first_seen_dt,
         pass_until=pass_dt,
         premium_until=premium_dt,
+        arisa_mode=row["arisa_mode"],
         tickets_3=row["tickets_3"],
         tickets_7=row["tickets_7"],
         tickets_10=row["tickets_10"],
@@ -1269,6 +1298,7 @@ def _backfill_user_columns(conn: sqlite3.Connection) -> None:
             arisa_pass_daily_limit = COALESCE(arisa_pass_daily_limit, NULL),
             arisa_pass_used_today = COALESCE(arisa_pass_used_today, 0),
             arisa_pass_usage_date = COALESCE(arisa_pass_usage_date, NULL),
+            arisa_mode = COALESCE(arisa_mode, NULL),
             last_general_chat_block_notice_at = COALESCE(last_general_chat_block_notice_at, NULL),
             lang = CASE
                 WHEN lang IS NULL THEN NULL
@@ -1298,6 +1328,7 @@ __all__ = [
     "ensure_user",
     "get_user",
     "get_user_lang",
+    "get_arisa_mode",
     "get_recent_feedback",
     "get_latest_audit",
     "get_latest_payment",
@@ -1319,6 +1350,7 @@ __all__ = [
     "mark_payment_refunded",
     "revoke_purchase",
     "set_arisa_trial_remaining",
+    "set_arisa_mode",
     "set_user_lang",
     "set_last_general_chat_block_notice",
     "set_terms_accepted",

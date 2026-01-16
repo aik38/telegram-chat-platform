@@ -88,6 +88,7 @@ from core.db import (
     set_terms_accepted,
     set_last_general_chat_block_notice,
     set_arisa_trial_remaining,
+    set_arisa_mode,
     update_arisa_credits,
     update_arisa_pass,
     revoke_purchase,
@@ -4756,10 +4757,12 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
     paid_user, pass_active, _paid_subscription_flag = resolve_arisa_paid_state(
         user_id, user=user, now=now
     )
-    need_type = DEFAULT_ARISA_NEED_TYPE
     calling = get_user_calling(paid=paid_user, known_name=None)
     provider = LLM_PROVIDER or infer_provider(get_openai_base_url())
-    temperature, request_overrides = arisa_generation_params(need_type, provider=provider)
+    temperature, request_overrides = arisa_generation_params(
+        DEFAULT_ARISA_NEED_TYPE, provider=provider
+    )
+    arisa_mode = user.arisa_mode if user else None
     _log_access_snapshot(
         user_id=user_id,
         is_admin=is_admin_user(user_id),
@@ -4787,14 +4790,14 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
                 user_query,
                 lang=lang,
                 paid=paid_user,
-                need_type=need_type,
+                mode=arisa_mode,
                 calling=calling,
             ),
             lang=lang,
             temperature=temperature,
             request_overrides=request_overrides,
             fallback_mode="arisa",
-            fallback_need_type=need_type,
+            fallback_need_type=DEFAULT_ARISA_NEED_TYPE,
             fallback_calling=calling,
             fallback_user_id=user_id,
             fallback_message_id=getattr(message, "message_id", None),
@@ -5213,6 +5216,8 @@ async def arisa_text(message: Message) -> None:
     now = utcnow()
 
     if action == "love":
+        if user_id is not None:
+            set_arisa_mode(user_id, "romance", now=now)
         await message.answer(
             get_arisa_prompt("ARISA_LOVE_PROMPTS", "ARISA_LOVE_PROMPT", lang=lang),
             reply_markup=build_arisa_menu(user_id),
@@ -5240,6 +5245,7 @@ async def arisa_text(message: Message) -> None:
                 reply_markup=build_store_keyboard(lang=lang),
             )
             return
+        set_arisa_mode(user_id, "sexy", now=now)
         await message.answer(
             get_arisa_prompt("ARISA_SEXY_PROMPTS", "ARISA_SEXY_PROMPT", lang=lang),
             reply_markup=build_arisa_menu(user_id),

@@ -1,4 +1,4 @@
-from bot.arisa_runtime import get_arisa_fallback_message
+from bot.arisa_runtime import DEFAULT_ARISA_NEED_TYPE, get_arisa_fallback_message
 
 
 def test_arisa_fallbacks_vary_by_message_id():
@@ -7,7 +7,7 @@ def test_arisa_fallbacks_vary_by_message_id():
     results = {
         get_arisa_fallback_message(
             lang="ja",
-            need_type="unknown",
+            need_type=DEFAULT_ARISA_NEED_TYPE,
             calling="あなた",
             user_id=user_id,
             message_id=message_id,
