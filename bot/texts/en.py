@@ -90,7 +90,7 @@ TEXTS = {
         "Tickets and passes for love talk / casual chat.\n"
         "Light chat ticket (100⭐️ / ~15 messages, first purchase gets +15 bonus = ~30 total)\n"
         "Solid chat ticket (300⭐️ / ~50 messages) / Deep chat ticket (500⭐️ / ~100 messages)\n"
-        "7-day pass (30 msgs/day) / 30-day pass (50 msgs/day)\n"
+        "7-day pass (25 msgs/day) / 30-day pass (30 msgs/day)\n"
         "Message counts are estimates and may vary with reply length.\n"
     ),
     "ARISA_OUT_OF_CREDITS": (
@@ -210,10 +210,10 @@ TEXTS = {
     "ARISA_PRODUCT_ARISA_CREDIT_300_DESCRIPTION": "300⭐️ ticket (~50 msgs).",
     "ARISA_PRODUCT_ARISA_CREDIT_500_TITLE": "Deep chat ticket (~100 msgs)",
     "ARISA_PRODUCT_ARISA_CREDIT_500_DESCRIPTION": "500⭐️ ticket (~100 msgs).",
-    "ARISA_PRODUCT_ARISA_PASS_7D_TITLE": "7-day pass (30 msgs/day)",
-    "ARISA_PRODUCT_ARISA_PASS_7D_DESCRIPTION": "7-day pass with 30 messages per day.",
-    "ARISA_PRODUCT_ARISA_PASS_30D_TITLE": "30-day pass (50 msgs/day)",
-    "ARISA_PRODUCT_ARISA_PASS_30D_DESCRIPTION": "30-day pass with 50 messages per day.",
+    "ARISA_PRODUCT_ARISA_PASS_7D_TITLE": "7-day pass (25 msgs/day)",
+    "ARISA_PRODUCT_ARISA_PASS_7D_DESCRIPTION": "7-day pass with 25 messages per day.",
+    "ARISA_PRODUCT_ARISA_PASS_30D_TITLE": "30-day pass (30 msgs/day)",
+    "ARISA_PRODUCT_ARISA_PASS_30D_DESCRIPTION": "30-day pass with 30 messages per day.",
     "NON_CONSULT_OUT_OF_QUOTA_MESSAGE": (
         "This bot is for tarot readings and chat. Use /read1 for readings or /love1 for love topics. "
         "Top up via /buy."
