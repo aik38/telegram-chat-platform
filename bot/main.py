@@ -125,7 +125,6 @@ from core.tarot.spreads import Spread
 from core.store.catalog import Product, get_product, iter_products
 
 from bot.arisa_runtime import (
-    DEFAULT_ARISA_NEED_TYPE,
     arisa_generation_params,
     build_arisa_messages,
     get_arisa_fallback_message,
@@ -1598,7 +1597,6 @@ def extract_completion_content_or_fallback(
     *,
     lang: str | None = "ja",
     mode: str | None = None,
-    need_type: str | None = None,
     calling: str = "あなた",
     fallback_user_id: int | None = None,
     fallback_message_id: int | None = None,
@@ -1610,7 +1608,6 @@ def extract_completion_content_or_fallback(
         if mode == "arisa":
             fallback = get_arisa_fallback_message(
                 lang=lang,
-                need_type=need_type or DEFAULT_ARISA_NEED_TYPE,
                 calling=calling,
                 user_id=fallback_user_id,
                 message_id=fallback_message_id,
@@ -1629,7 +1626,6 @@ async def call_openai_with_retry(
     temperature: float | None = None,
     request_overrides: dict[str, Any] | None = None,
     fallback_mode: str | None = None,
-    fallback_need_type: str | None = None,
     fallback_calling: str = "あなた",
     fallback_user_id: int | None = None,
     fallback_message_id: int | None = None,
@@ -1661,7 +1657,6 @@ async def call_openai_with_retry(
                 completion,
                 lang=lang_code,
                 mode=fallback_mode,
-                need_type=fallback_need_type,
                 calling=fallback_calling,
                 fallback_user_id=fallback_user_id,
                 fallback_message_id=fallback_message_id,
@@ -1726,7 +1721,6 @@ async def call_openai_with_retry_and_usage(
     temperature: float | None = None,
     request_overrides: dict[str, Any] | None = None,
     fallback_mode: str | None = None,
-    fallback_need_type: str | None = None,
     fallback_calling: str = "あなた",
     fallback_user_id: int | None = None,
     fallback_message_id: int | None = None,
@@ -1758,7 +1752,6 @@ async def call_openai_with_retry_and_usage(
                 completion,
                 lang=lang_code,
                 mode=fallback_mode,
-                need_type=fallback_need_type,
                 calling=fallback_calling,
                 fallback_user_id=fallback_user_id,
                 fallback_message_id=fallback_message_id,
@@ -4759,9 +4752,7 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
     )
     calling = get_user_calling(paid=paid_user, known_name=None)
     provider = LLM_PROVIDER or infer_provider(get_openai_base_url())
-    temperature, request_overrides = arisa_generation_params(
-        DEFAULT_ARISA_NEED_TYPE, provider=provider
-    )
+    temperature, request_overrides = arisa_generation_params(provider=provider)
     arisa_mode = user.arisa_mode if user else None
     _log_access_snapshot(
         user_id=user_id,
@@ -4797,7 +4788,6 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
             temperature=temperature,
             request_overrides=request_overrides,
             fallback_mode="arisa",
-            fallback_need_type=DEFAULT_ARISA_NEED_TYPE,
             fallback_calling=calling,
             fallback_user_id=user_id,
             fallback_message_id=getattr(message, "message_id", None),
