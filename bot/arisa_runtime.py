@@ -7,9 +7,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from bot.arisa_prompts import build_system_prompt
+from bot.arisa_prompts import get_arisa_system_prompt
 from bot.texts.i18n import normalize_lang
-from core.prompts import get_consult_system_prompt
+from core.prompts import get_consult_system_prompt, language_guard
 
 ARISA_DEFAULT_TEMPERATURE = 0.72
 ARISA_DEFAULT_TOP_P = 0.9
@@ -155,7 +155,7 @@ def build_arisa_messages(
 ) -> list[dict[str, str]]:
     """Arisaモードの system prompt を組み立てる。"""
     lang_code = normalize_lang(lang)
-    system_prompt = build_system_prompt(mode) or _read_arisa_file("system_prompt.txt")
+    system_prompt = get_arisa_system_prompt(lang_code, mode) or _read_arisa_file("system_prompt.txt")
     if not system_prompt:
         system_prompt = get_consult_system_prompt(lang_code)
     boundary_lines = _read_arisa_file("boundary_lines.txt")
@@ -176,5 +176,6 @@ def build_arisa_messages(
     parts.append(internal_flags)
     return [
         {"role": "system", "content": "\n\n".join(parts)},
+        {"role": "system", "content": language_guard(lang_code)},
         {"role": "user", "content": user_query},
     ]

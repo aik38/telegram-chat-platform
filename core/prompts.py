@@ -19,10 +19,30 @@ OUTPUT_LANGUAGE_LINES: dict[str, str] = {
     "pt": "Responda SOMENTE em Português.",
 }
 
+LANGUAGE_GUARD_LINES: dict[str, str] = {
+    "ja": (
+        "出力は必ず日本語のみ。ほかの言語を混ぜない。"
+        "ユーザーが別の言語で書いても、内容を日本語に翻訳して日本語で返答する。"
+    ),
+    "en": (
+        "Output must be ONLY in English. Do not mix other languages."
+        "Even if the user writes in another language, translate the content and reply in English."
+    ),
+    "pt": (
+        "A resposta deve ser SOMENTE em português. Não misture outros idiomas."
+        "Mesmo que o usuário escreva em outro idioma, traduza o conteúdo e responda em português."
+    ),
+}
+
 
 def _get_output_language_line(lang: str | None) -> str:
     lang_code = _normalize_lang(lang)
     return OUTPUT_LANGUAGE_LINES.get(lang_code, OUTPUT_LANGUAGE_LINES["ja"])
+
+
+def language_guard(lang: str | None = "ja") -> str:
+    lang_code = _normalize_lang(lang)
+    return LANGUAGE_GUARD_LINES.get(lang_code, LANGUAGE_GUARD_LINES["ja"])
 
 
 def _read_character_file(filename: str) -> str | None:
