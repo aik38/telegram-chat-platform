@@ -13,6 +13,18 @@ def _normalize_lang(lang: str | None) -> str:
     return "ja"
 
 
+OUTPUT_LANGUAGE_LINES: dict[str, str] = {
+    "ja": "必ず日本語のみで返答。",
+    "en": "Reply ONLY in English.",
+    "pt": "Responda SOMENTE em Português.",
+}
+
+
+def _get_output_language_line(lang: str | None) -> str:
+    lang_code = _normalize_lang(lang)
+    return OUTPUT_LANGUAGE_LINES.get(lang_code, OUTPUT_LANGUAGE_LINES["ja"])
+
+
 def _read_character_file(filename: str) -> str | None:
     character = os.getenv("CHARACTER", "").strip()
     if not character:
@@ -315,10 +327,12 @@ TAROT_THEME_FOCUS_MAP: dict[str, dict[str, str]] = {
 
 def get_consult_system_prompt(lang: str | None = "ja") -> str:
     lang_code = _normalize_lang(lang)
+    output_language_line = _get_output_language_line(lang_code)
     character_prompt = _read_character_file("system_prompt.txt")
     if character_prompt is not None:
-        return character_prompt
-    return CONSULT_SYSTEM_PROMPTS.get(lang_code, CONSULT_SYSTEM_PROMPTS["ja"])
+        return f"{output_language_line}\n{character_prompt}"
+    base_prompt = CONSULT_SYSTEM_PROMPTS.get(lang_code, CONSULT_SYSTEM_PROMPTS["ja"])
+    return f"{output_language_line}\n{base_prompt}"
 
 
 def get_tarot_fixed_output_format(lang: str | None = "ja", *, time_axis: bool = False) -> str:
@@ -344,6 +358,7 @@ def get_tarot_system_prompt(
     theme: str | None, *, time_axis: bool = False, lang: str | None = "ja"
 ) -> str:
     lang_code = _normalize_lang(lang)
+    output_language_line = _get_output_language_line(lang_code)
     base_template = (
         TIME_AXIS_TAROT_SYSTEM_PROMPT_TEMPLATES
         if time_axis
@@ -357,8 +372,8 @@ def get_tarot_system_prompt(
     hint = hint_mapping.get(theme or "", "")
     if hint:
         prefix = "- テーマ: " if lang_code == "ja" else "- Theme: "
-        return f"{base}\n{prefix}{hint}"
-    return base
+        return f"{output_language_line}\n{base}\n{prefix}{hint}"
+    return f"{output_language_line}\n{base}"
 
 
 def theme_instructions(theme: str | None, lang: str | None = "ja") -> str:
