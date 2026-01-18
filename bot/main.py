@@ -562,14 +562,17 @@ TIME_RANGE_TEXTS = {
 }
 REWRITE_PROMPTS = {
     "ja": (
+        "必ず日本語のみで返答。\n"
         "次の文章から、タロット・カード・占いに関する言及をすべて取り除いて日本語で書き直してください。"
         "丁寧で落ち着いた敬語を維持し、相談の意図や励ましは残してください。"
     ),
     "en": (
+        "Reply ONLY in English.\n"
         "Rewrite the text in English, removing any mention of tarot, cards, or divination."
         " Keep a calm, supportive tone and preserve the intent of the consultation."
     ),
     "pt": (
+        "Responda SOMENTE em Português.\n"
         "Reescreva o texto em português, removendo qualquer menção a tarô, cartas ou adivinhação."
         " Mantenha um tom calmo e acolhedor e preserve a intenção da conversa."
     ),
@@ -2017,6 +2020,15 @@ def resolve_user_lang(message: Message) -> tuple[str, bool]:
         telegram_lang = normalize_lang(message.from_user.language_code)
 
     return telegram_lang or "ja", False
+
+
+def resolve_lang_from_message(message: Message) -> str:
+    user_id = message.from_user.id if message.from_user else None
+    saved_lang = get_user_lang(user_id) if user_id is not None else None
+    if saved_lang:
+        return saved_lang
+    telegram_lang = getattr(getattr(message, "from_user", None), "language_code", None)
+    return normalize_lang(telegram_lang) if telegram_lang else "ja"
 
 
 def get_user_lang_or_default(user_id: int | None) -> str:
@@ -3619,7 +3631,7 @@ async def cmd_lang(message: Message, *, skip_dedup: bool = False) -> None:
     if user_id is None:
         await message.answer(t("ja", "USER_INFO_MISSING"))
         return
-    lang = get_user_lang_or_default(user_id)
+    lang = resolve_lang_from_message(message)
     await message.answer(
         t(lang, "LANGUAGE_SELECT_PROMPT"),
         reply_markup=build_lang_keyboard(lang=lang),
@@ -4259,7 +4271,7 @@ async def handle_tarot_reading(
     total_start = perf_counter()
     openai_latency_ms: float | None = None
     user_id = message.from_user.id if message.from_user else None
-    lang = get_user_lang_or_default(user_id)
+    lang = resolve_lang_from_message(message)
     lang_code = normalize_lang(lang)
     chat_id = get_chat_id(message)
     can_use_bot = hasattr(message, "chat") and getattr(message.chat, "id", None) is not None
@@ -4530,7 +4542,7 @@ def _build_whoami_lines(
 async def handle_general_chat(message: Message, user_query: str) -> None:
     now = utcnow()
     user_id = message.from_user.id if message.from_user else None
-    lang = get_user_lang_or_default(user_id)
+    lang = resolve_lang_from_message(message)
     total_start = perf_counter()
     openai_latency_ms: float | None = None
     consult_intent = _is_consult_intent(user_query)
@@ -4704,7 +4716,7 @@ def _is_arisa_blockable_command(text: str | None) -> bool:
 
 async def handle_arisa_chat(message: Message, user_query: str) -> None:
     user_id = message.from_user.id if message.from_user else None
-    lang = get_user_lang_or_default(user_id)
+    lang = resolve_lang_from_message(message)
     total_start = perf_counter()
     openai_latency_ms: float | None = None
     event_success = False
@@ -4895,7 +4907,7 @@ async def arisa_cmd_lang(message: Message, *, skip_dedup: bool = False) -> None:
     if user_id is None:
         await message.answer(t("ja", "USER_INFO_MISSING"))
         return
-    lang = get_user_lang_or_default(user_id)
+    lang = resolve_lang_from_message(message)
     await message.answer(
         t(lang, "LANGUAGE_SELECT_PROMPT"),
         reply_markup=build_lang_keyboard(lang=lang),
@@ -5200,7 +5212,7 @@ async def arisa_other_command(message: Message) -> None:
 @arisa_router.message(F.text)
 async def arisa_text(message: Message) -> None:
     user_id = message.from_user.id if message.from_user else None
-    lang = get_user_lang_or_default(user_id)
+    lang = resolve_lang_from_message(message)
     text = message.text or ""
     action = _resolve_arisa_menu_action(text, lang)
     now = utcnow()
@@ -5281,7 +5293,7 @@ async def arisa_text(message: Message) -> None:
 )
 async def handle_message(message: Message) -> None:
     user_id = message.from_user.id if message.from_user else None
-    lang = get_user_lang_or_default(user_id)
+    lang = resolve_lang_from_message(message)
     content_type = getattr(message, "content_type", ContentType.TEXT)
     is_text = content_type == ContentType.TEXT
     if not is_text:
@@ -5303,7 +5315,7 @@ async def handle_message(message: Message) -> None:
     if await reset_state_if_inactive(message, now=now):
         return
     mark_user_active(user_id, now=now)
-    lang = get_user_lang_or_default(user_id)
+    lang = resolve_lang_from_message(message)
     menu_markup = build_base_menu(user_id)
     quick_menu = build_quick_menu(user_id)
     admin_mode = is_admin_user(user_id)
