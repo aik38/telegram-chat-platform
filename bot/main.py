@@ -3667,6 +3667,16 @@ async def handle_lang_set(query: CallbackQuery) -> None:
         return
 
     set_user_lang(user_id, normalized)
+    logger.info(
+        "Language selection updated",
+        extra={
+            "user_id": user_id,
+            "chat_id": getattr(getattr(query.message, "chat", None), "id", None),
+            "callback_data": data,
+            "normalized": normalized,
+            "read_back": get_user_lang(user_id),
+        },
+    )
     set_user_mode(user_id, "consult")
     reset_tarot_state(user_id)
     mark_user_active(user_id)
@@ -4332,6 +4342,23 @@ async def handle_tarot_reading(
             t(lang_code, "READING_IN_PROGRESS_NOTICE"),
             reply_markup=build_quick_menu(user_id),
         )
+        system_prompt = next(
+            (msg.get("content", "") for msg in messages if msg.get("role") == "system"),
+            "",
+        )
+        saved_lang = get_user_lang(user_id) if user_id is not None else None
+        logger.info(
+            "LLM tarot request",
+            extra={
+                "mode": "tarot",
+                "user_id": user_id,
+                "chat_id": chat_id,
+                "saved_lang": saved_lang,
+                "telegram_lang": getattr(getattr(message, "from_user", None), "language_code", None),
+                "resolved_lang": lang_code,
+                "system_prompt_line": (system_prompt.splitlines() or [""])[0],
+            },
+        )
         openai_start = perf_counter()
         try:
             answer, fatal = await call_openai_with_retry(messages, lang=lang_code)
@@ -4616,15 +4643,30 @@ async def handle_general_chat(message: Message, user_query: str) -> None:
     )
 
     try:
+        messages = build_general_chat_messages(user_query, lang=lang)
+        system_prompt = next(
+            (msg.get("content", "") for msg in messages if msg.get("role") == "system"),
+            "",
+        )
+        saved_lang = get_user_lang(user_id) if user_id is not None else None
+        logger.info(
+            "LLM chat request",
+            extra={
+                "mode": "chat",
+                "user_id": user_id,
+                "chat_id": chat_id_value,
+                "chat_kind": "consult" if consult_intent else "general",
+                "saved_lang": saved_lang,
+                "telegram_lang": getattr(getattr(message, "from_user", None), "language_code", None),
+                "resolved_lang": lang,
+                "system_prompt_line": (system_prompt.splitlines() or [""])[0],
+            },
+        )
         openai_start = perf_counter()
         try:
-            answer, fatal = await call_openai_with_retry(
-                build_general_chat_messages(user_query, lang=lang), lang=lang
-            )
+            answer, fatal = await call_openai_with_retry(messages, lang=lang)
         except TypeError:
-            answer, fatal = await call_openai_with_retry(
-                build_general_chat_messages(user_query, lang=lang)
-            )
+            answer, fatal = await call_openai_with_retry(messages)
         openai_latency_ms = (perf_counter() - openai_start) * 1000
         if fatal:
             error_text = (
@@ -4962,6 +5004,16 @@ async def arisa_handle_lang_set(query: CallbackQuery) -> None:
         return
 
     set_user_lang(user_id, normalized)
+    logger.info(
+        "Language selection updated",
+        extra={
+            "user_id": user_id,
+            "chat_id": getattr(getattr(query.message, "chat", None), "id", None),
+            "callback_data": data,
+            "normalized": normalized,
+            "read_back": get_user_lang(user_id),
+        },
+    )
     mark_user_active(user_id)
     lang_label_map = {
         "ja": t("ja", "LANGUAGE_OPTION_JA"),
