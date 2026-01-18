@@ -45,7 +45,14 @@ def test_arisa_texts_avoid_choice_keywords() -> None:
     files_to_check.extend(
         [
             Path("characters/arisa/system_prompt.txt"),
+            Path("characters/arisa/system_prompt.en.txt"),
+            Path("characters/arisa/system_prompt.pt.txt"),
+            Path("characters/arisa/boundary_lines.txt"),
+            Path("characters/arisa/boundary_lines.en.txt"),
+            Path("characters/arisa/boundary_lines.pt.txt"),
             Path("characters/arisa/style.md"),
+            Path("characters/arisa/style.en.md"),
+            Path("characters/arisa/style.pt.md"),
         ]
     )
     for prompt_file in files_to_check:
