@@ -155,11 +155,23 @@ def build_arisa_messages(
 ) -> list[dict[str, str]]:
     """Arisaモードの system prompt を組み立てる。"""
     lang_code = normalize_lang(lang)
-    system_prompt = build_system_prompt(mode) or _read_arisa_file("system_prompt.txt")
+    if calling == "あなた":
+        if lang_code == "en":
+            calling = "you"
+        elif lang_code == "pt":
+            calling = "você"
+    mode_prompt = build_system_prompt(mode) if lang_code == "ja" else ""
+    system_prompt = (
+        mode_prompt
+        or _read_arisa_file(f"system_prompt.{lang_code}.txt")
+        or _read_arisa_file("system_prompt.txt")
+    )
     if not system_prompt:
         system_prompt = get_consult_system_prompt(lang_code)
-    boundary_lines = _read_arisa_file("boundary_lines.txt")
-    style = _read_arisa_file("style.md")
+    boundary_lines = _read_arisa_file(f"boundary_lines.{lang_code}.txt") or _read_arisa_file(
+        "boundary_lines.txt"
+    )
+    style = _read_arisa_file(f"style.{lang_code}.md") or _read_arisa_file("style.md")
     internal_flags = (
         f'MODE: "{ "PAID" if paid else "FREE" }"\n'
         f'FIRST_PAID_TURN: "{ "true" if first_paid_turn else "false" }"\n'
