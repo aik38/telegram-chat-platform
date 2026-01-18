@@ -106,6 +106,7 @@ from core.prompts import (
     get_tarot_fixed_output_format,
     get_tarot_output_rules,
     get_tarot_system_prompt,
+    language_guard,
     theme_instructions,
 )
 from core.tarot import (
@@ -261,6 +262,8 @@ def _apply_runtime_config() -> None:
                 apply_to_callbacks=True,
             )
         )
+        dp.message.middleware(LangResolutionMiddleware())
+        dp.callback_query.middleware(LangResolutionMiddleware())
         _MIDDLEWARES_CONFIGURED = True
 
     ARISA_PASS_PRODUCTS["ARISA_PASS_7D"]["daily_limit"] = PASS_7D_DAILY_LIMIT
@@ -329,6 +332,51 @@ class RequestIdMiddleware(BaseMiddleware):
             return await handler(event, data)
         finally:
             request_id_var.reset(token)
+
+
+def _log_lang_resolution(
+    *,
+    resolved_lang: str,
+    lang_source: str,
+    handler_route: str,
+    user_id: int | None,
+) -> None:
+    logger.info(
+        "Resolved language",
+        extra={
+            "resolved_lang": resolved_lang,
+            "lang_source": lang_source,
+            "handler_route": handler_route,
+            "user_id": user_id,
+        },
+    )
+
+
+class LangResolutionMiddleware(BaseMiddleware):
+    async def __call__(
+        self,
+        handler: Callable[[CallbackQuery | Message, dict[str, Any]], Awaitable[Any]],
+        event: CallbackQuery | Message,
+        data: dict[str, Any],
+    ) -> Any:
+        handler_route = "callback" if isinstance(event, CallbackQuery) else "text"
+        user_id = getattr(event.from_user, "id", None)
+        telegram_lang = getattr(getattr(event, "from_user", None), "language_code", None)
+        payload_lang = _extract_start_payload(event) if isinstance(event, Message) else None
+        if payload_lang:
+            resolved_lang, lang_source = payload_lang, "db"
+        else:
+            resolved_lang, lang_source = _resolve_lang_with_source(user_id, telegram_lang)
+        if isinstance(event, Message):
+            if (event.text or "").startswith("/"):
+                handler_route = "command"
+        _log_lang_resolution(
+            resolved_lang=resolved_lang,
+            lang_source=lang_source,
+            handler_route=handler_route,
+            user_id=user_id,
+        )
+        return await handler(event, data)
 
 
 dp.message.middleware(RequestIdMiddleware())
@@ -1495,6 +1543,7 @@ def build_general_chat_messages(user_query: str, *, lang: str | None = "ja") -> 
     """通常チャットモードの system prompt を組み立てる。"""
     return [
         {"role": "system", "content": get_consult_system_prompt(lang)},
+        {"role": "system", "content": language_guard(lang)},
         {"role": "user", "content": user_query},
     ]
 
@@ -2022,13 +2071,29 @@ def resolve_user_lang(message: Message) -> tuple[str, bool]:
     return telegram_lang or "ja", False
 
 
-def resolve_lang_from_message(message: Message) -> str:
-    user_id = message.from_user.id if message.from_user else None
+def _resolve_lang_with_source(
+    user_id: int | None, telegram_lang: str | None
+) -> tuple[str, str]:
     saved_lang = get_user_lang(user_id) if user_id is not None else None
     if saved_lang:
-        return saved_lang
+        return saved_lang, "db"
+    if telegram_lang:
+        return normalize_lang(telegram_lang), "detect"
+    return "ja", "default"
+
+
+def resolve_lang_from_message(message: Message) -> str:
+    user_id = message.from_user.id if message.from_user else None
     telegram_lang = getattr(getattr(message, "from_user", None), "language_code", None)
-    return normalize_lang(telegram_lang) if telegram_lang else "ja"
+    lang, _source = _resolve_lang_with_source(user_id, telegram_lang)
+    return lang
+
+
+def resolve_lang_from_callback(query: CallbackQuery) -> str:
+    user_id = query.from_user.id if query.from_user else None
+    telegram_lang = getattr(getattr(query, "from_user", None), "language_code", None)
+    lang, _source = _resolve_lang_with_source(user_id, telegram_lang)
+    return lang
 
 
 def get_user_lang_or_default(user_id: int | None) -> str:
@@ -3087,6 +3152,7 @@ def build_tarot_messages(
     return [
         {"role": "system", "content": tarot_system_prompt},
         {"role": "system", "content": format_hint},
+        {"role": "system", "content": language_guard(lang_code)},
         {"role": "assistant", "content": json.dumps(tarot_payload, ensure_ascii=False, indent=2)},
         {"role": "user", "content": user_query},
     ]
@@ -3139,6 +3205,7 @@ async def rewrite_chat_response(original: str, *, lang: str | None = "ja") -> tu
 
     messages = [
         {"role": "system", "content": rewrite_prompt},
+        {"role": "system", "content": language_guard(lang)},
         {"role": "user", "content": original},
     ]
 
@@ -3391,7 +3458,7 @@ async def cmd_terms(message: Message) -> None:
 @tarot_router.callback_query(F.data == TERMS_CALLBACK_SHOW)
 async def handle_terms_show(query: CallbackQuery):
     await _safe_answer_callback(query, cache_time=1)
-    lang = get_user_lang_or_default(query.from_user.id if query.from_user else None)
+    lang = resolve_lang_from_callback(query)
     if query.message:
         await query.message.answer(
             get_terms_text(lang=lang),
@@ -3403,7 +3470,7 @@ async def handle_terms_show(query: CallbackQuery):
 async def handle_terms_agree(query: CallbackQuery):
     await _safe_answer_callback(query, cache_time=1)
     user_id = query.from_user.id if query.from_user else None
-    lang = get_user_lang_or_default(user_id)
+    lang = resolve_lang_from_callback(query)
     if user_id is None:
         await _safe_answer_callback(query, t(lang, "USER_INFO_MISSING"), show_alert=True)
         return
@@ -3421,7 +3488,7 @@ async def handle_terms_agree(query: CallbackQuery):
 async def handle_terms_agree_and_buy(query: CallbackQuery):
     await _safe_answer_callback(query, cache_time=1)
     user_id = query.from_user.id if query.from_user else None
-    lang = get_user_lang_or_default(user_id)
+    lang = resolve_lang_from_callback(query)
     if user_id is None:
         await _safe_answer_callback(query, t(lang, "USER_INFO_MISSING"), show_alert=True)
         return
@@ -3642,13 +3709,14 @@ async def cmd_lang(message: Message, *, skip_dedup: bool = False) -> None:
 async def handle_nav_menu(query: CallbackQuery, state: FSMContext) -> None:
     await _safe_answer_callback(query, cache_time=1)
     user_id = query.from_user.id if query.from_user else None
+    lang = resolve_lang_from_callback(query)
     reset_tarot_state(user_id)
     set_user_mode(user_id, "consult")
     mark_user_active(user_id)
     await state.clear()
     if query.message:
         await query.message.answer(
-            t(get_user_lang_or_default(user_id), "MENU_RETURNED_TEXT"),
+            t(lang, "MENU_RETURNED_TEXT"),
             reply_markup=build_base_menu(user_id),
         )
 
@@ -3698,7 +3766,7 @@ async def handle_nav_status(query: CallbackQuery, state: FSMContext) -> None:
     set_user_mode(user_id, "status")
     mark_user_active(user_id)
     now = utcnow()
-    lang = get_user_lang_or_default(user_id)
+    lang = resolve_lang_from_callback(query)
     user = get_user_with_default(user_id) or ensure_user(user_id, now=now)
     formatted = format_status(user, now=now, lang=lang)
     if query.message:
@@ -3715,7 +3783,7 @@ async def handle_nav_charge(query: CallbackQuery, state: FSMContext) -> None:
         ensure_user(user_id)
         set_user_mode(user_id, "charge")
         mark_user_active(user_id)
-    lang = get_user_lang_or_default(user_id)
+    lang = resolve_lang_from_callback(query)
     await state.clear()
     if query.message:
         await prompt_charge_menu(query.message)
@@ -3751,7 +3819,7 @@ async def handle_buy_callback(query: CallbackQuery):
 
     now = utcnow()
     user = ensure_user(user_id, now=now)
-    lang = get_user_lang_or_default(user_id)
+    lang = resolve_lang_from_callback(query)
     _safe_log_payment_event(
         user_id=user_id, event_type="buy_click", sku=product.sku, payload=query.data
     )
@@ -3837,7 +3905,7 @@ async def handle_buy_callback(query: CallbackQuery):
 @tarot_router.callback_query(F.data == "addon:pending")
 async def handle_addon_pending(query: CallbackQuery):
     await _safe_answer_callback(query, cache_time=1)
-    lang = get_user_lang_or_default(query.from_user.id if query.from_user else None)
+    lang = resolve_lang_from_callback(query)
     await _safe_answer_callback(query, t(lang, "ADDON_PENDING_ALERT"), show_alert=True)
 
 
@@ -3849,14 +3917,14 @@ async def handle_tarot_theme_select(query: CallbackQuery):
     user_id = query.from_user.id if query.from_user else None
     mark_user_active(user_id)
     if theme not in {"love", "marriage", "work", "life"}:
-        lang = get_user_lang_or_default(user_id)
+        lang = resolve_lang_from_callback(query)
         await _safe_answer_callback(query, t(lang, "UNKNOWN_THEME"), show_alert=True)
         return
 
     set_user_mode(user_id, "tarot")
     set_tarot_theme(user_id, theme)
     set_tarot_flow(user_id, "awaiting_question")
-    lang = get_user_lang_or_default(user_id)
+    lang = resolve_lang_from_callback(query)
     await _safe_answer_callback(query, t(lang, "TAROT_THEME_SET_CONFIRMATION"))
     if query.message:
         prompt_text = build_tarot_question_prompt(theme, lang=lang)
@@ -3869,7 +3937,7 @@ async def handle_tarot_theme_select(query: CallbackQuery):
 async def handle_upgrade_to_three(query: CallbackQuery):
     await _safe_answer_callback(query, cache_time=1)
     if query.message:
-        lang = get_user_lang_or_default(query.from_user.id if query.from_user else None)
+        lang = resolve_lang_from_callback(query)
         await query.message.answer(
             "3枚スプレッドで深掘りするには /buy からチケットを購入してください。\n"
             "決済が未開放の場合は少しお待ちください。",
@@ -5003,7 +5071,8 @@ async def arisa_handle_nav_status(query: CallbackQuery, state: FSMContext) -> No
     await state.clear()
     admin_user = ensure_arisa_admin_pass(user_id, now=now)
     user = admin_user or get_user_with_default(user_id, now=now) or ensure_user(user_id, now=now)
-    formatted = format_arisa_status(user, now=now, lang=get_user_lang_or_default(user_id))
+    lang = resolve_lang_from_callback(query)
+    formatted = format_arisa_status(user, now=now, lang=lang)
     if query.message:
         await query.message.answer(formatted, reply_markup=build_arisa_menu(user_id))
 
@@ -5018,7 +5087,7 @@ async def arisa_handle_nav_charge(query: CallbackQuery, state: FSMContext) -> No
     mark_user_active(user_id)
     await state.clear()
     if query.message:
-        lang = get_user_lang_or_default(user_id)
+        lang = resolve_lang_from_callback(query)
         await query.message.answer(
             t(lang, "CHARGE_MODE_PROMPT"), reply_markup=build_arisa_menu(user_id)
         )
@@ -5032,7 +5101,7 @@ async def arisa_handle_buy(query: CallbackQuery) -> None:
     _, _, sku = data.partition(":")
     product = get_product(sku) if sku else None
     user_id = query.from_user.id if query.from_user else None
-    lang = get_user_lang_or_default(user_id)
+    lang = resolve_lang_from_callback(query)
     if not product or not _is_arisa_product(product) or user_id is None:
         _safe_log_payment_event(
             user_id=user_id,
