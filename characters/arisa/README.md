@@ -1,7 +1,8 @@
 # Arisa
 
 ## 概要：Arisaの人格は何で決まるか
-- 人格の中心は `characters/arisa/prompts/{base,romance,sexy}.txt` のテキストで定義される（日本語のみ `bot/arisa_prompts.build_system_prompt(...)` が読み込む）。
+- 人格の中心は `characters/arisa/prompts/{base,romance,sexy}.txt` のテキストで定義される（日本語は `bot/arisa_prompts.build_system_prompt(...)` が読み込む）。
+- 英語/ポルトガル語は `characters/arisa/prompts/{base,romance,sexy}.{en,pt}.txt` が存在する場合に優先して読み込まれ、無ければ日本語の `*.txt` にフォールバックする。
 - コード側は、(1) どのモードを使うか（`users.arisa_mode` の保存/参照）、(2) 追加テキスト（`system_prompt*.txt` / `boundary_lines*.txt` / `style*.md` / ソフトな補助文）を足すか、(3) 課金/トライアル/DB状態によるロックやクレジット消費、(4) /start とモード開始文のランダム選択、を司る。
 - 実際の合成は `bot/arisa_runtime.build_arisa_messages(...)` が行い、JA以外や欠落時は `characters/arisa/system_prompt*.txt` と `core.prompts.get_consult_system_prompt(...)` にフォールバックする。
 
@@ -30,13 +31,18 @@ Arisaは「19歳以上の大学生」という設定の恋愛ボットです。�
 ## どこを編集すればキャラが変わるか（ファイル早見表）
 | 調整したい内容 | 実ファイル | 読み込み・参照元 |
 | --- | --- | --- |
-| base人格（中核ルール） | `characters/arisa/prompts/base.txt` | `bot/arisa_prompts.load_prompt("base")` → `build_system_prompt(...)` |
-| 恋愛差分 | `characters/arisa/prompts/romance.txt` | `bot/arisa_prompts.load_prompt("romance")` → `build_system_prompt(...)` |
-| セクシー差分 | `characters/arisa/prompts/sexy.txt` | `bot/arisa_prompts.load_prompt("sexy")` → `build_system_prompt(...)` |
+| base人格（中核ルール） | `characters/arisa/prompts/base.txt`（英語/ポルトガル語は `base.en.txt` / `base.pt.txt`） | `bot/arisa_prompts.load_prompt("base", lang)` → `build_system_prompt(...)` |
+| 恋愛差分 | `characters/arisa/prompts/romance.txt`（英語/ポルトガル語は `romance.en.txt` / `romance.pt.txt`） | `bot/arisa_prompts.load_prompt("romance", lang)` → `build_system_prompt(...)` |
+| セクシー差分 | `characters/arisa/prompts/sexy.txt`（英語/ポルトガル語は `sexy.en.txt` / `sexy.pt.txt`） | `bot/arisa_prompts.load_prompt("sexy", lang)` → `build_system_prompt(...)` |
 | /start開始文（ランダム） | `bot/texts/ja.py` の `ARISA_START_TEXT_VARIANTS`（他言語は `bot/texts/en.py` / `bot/texts/pt.py`） | `bot/main.py:get_arisa_start_text()` で `t(..., "ARISA_START_TEXT_VARIANTS")` を `random.choice` |
 | 恋愛/セクシー開始文（ボタン押下直後） | `bot/texts/ja.py` の `ARISA_LOVE_PROMPTS` / `ARISA_SEXY_PROMPTS`（他言語は `bot/texts/en.py` / `bot/texts/pt.py`） | `bot/main.py:get_arisa_prompt()` で `random.choice` |
 | モード保存（DB） | `core/db.py:set_arisa_mode(...)` が `users.arisa_mode` を更新 | `bot/main.py` の恋愛/セクシー分岐で呼び出し |
 | 無操作（mode=None）時のフォールバック | `bot/arisa_prompts._SOFT_STYLE_ADDON` | `bot/arisa_prompts.build_system_prompt(...)` が `romance/sexy` 以外のときに追加 |
+
+## 言語別プロンプトの読み込み順
+- 日本語（ja/未設定/不明）: `prompts/base.txt` / `prompts/romance.txt` / `prompts/sexy.txt` を常に使用。
+- 英語（en）: `prompts/*.en.txt` を優先し、無ければ `prompts/*.txt` にフォールバック。
+- ポルトガル語（pt）: `prompts/*.pt.txt` を優先し、無ければ `prompts/*.txt` にフォールバック。
 
 ## プロンプト合成フロー（矢印図）
 ```
