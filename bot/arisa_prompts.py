@@ -11,24 +11,37 @@ _SOFT_STYLE_ADDON = (
 )
 
 
-@lru_cache(maxsize=8)
-def load_prompt(name: str) -> str:
-    path = _PROMPTS_DIR / f"{name}.txt"
-    if not path.is_file():
-        return ""
-    return path.read_text(encoding="utf-8").strip()
+@lru_cache(maxsize=16)
+def load_prompt(name: str, lang: str | None = None) -> str:
+    lang_code = (lang or "").strip().lower()
+    candidates: list[Path] = []
+    if lang_code in {"en", "pt"}:
+        candidates.append(_PROMPTS_DIR / f"{name}.{lang_code}.txt")
+    candidates.append(_PROMPTS_DIR / f"{name}.txt")
+    for path in candidates:
+        if path.is_file():
+            return path.read_text(encoding="utf-8").strip()
+    return ""
 
 
-def build_system_prompt(mode: str | None) -> str:
-    base = load_prompt("base")
+def _should_use_soft_addon(lang_code: str) -> bool:
+    if lang_code in {"en", "pt"}:
+        return not (_PROMPTS_DIR / f"base.{lang_code}.txt").is_file()
+    return True
+
+
+def build_system_prompt(mode: str | None, lang: str | None = None) -> str:
+    lang_code = (lang or "").strip().lower()
+    base = load_prompt("base", lang=lang_code)
     parts: list[str] = [base] if base else []
     normalized = (mode or "none").strip().lower()
     if normalized in {"romance", "sexy"}:
-        mode_prompt = load_prompt(normalized)
+        mode_prompt = load_prompt(normalized, lang=lang_code)
         if mode_prompt:
             parts.append(mode_prompt)
     else:
-        parts.append(_SOFT_STYLE_ADDON)
+        if _should_use_soft_addon(lang_code):
+            parts.append(_SOFT_STYLE_ADDON)
     return "\n\n".join(part for part in parts if part)
 
 

@@ -160,7 +160,7 @@ def build_arisa_messages(
             calling = "you"
         elif lang_code == "pt":
             calling = "você"
-    mode_prompt = build_system_prompt(mode) if lang_code == "ja" else ""
+    mode_prompt = build_system_prompt(mode, lang=lang_code)
     system_prompt = (
         mode_prompt
         or _read_arisa_file(f"system_prompt.{lang_code}.txt")
