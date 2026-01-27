@@ -15,7 +15,9 @@ ARISA_DEFAULT_TEMPERATURE = 0.72
 ARISA_DEFAULT_TOP_P = 0.9
 ARISA_DEFAULT_PRESENCE = 0.2
 ARISA_DEFAULT_FREQUENCY = 0.15
+LOVE_STYLE_OPTIONS = (1, 2, 3)
 CURRENT_LOVE_STYLE_CARD = 1
+LOVE_STYLE_LOCKED = False
 
 _ARISA_DIR = Path(__file__).resolve().parents[1] / "characters" / "arisa"
 
@@ -48,10 +50,22 @@ def get_current_love_style_card() -> int:
     return CURRENT_LOVE_STYLE_CARD
 
 
-def set_current_love_style_card(value: int) -> int:
-    global CURRENT_LOVE_STYLE_CARD
+def is_love_style_locked() -> bool:
+    return LOVE_STYLE_LOCKED
+
+
+def set_current_love_style_card(value: int, *, locked: bool = True) -> int:
+    global CURRENT_LOVE_STYLE_CARD, LOVE_STYLE_LOCKED
     CURRENT_LOVE_STYLE_CARD = value
+    LOVE_STYLE_LOCKED = locked
     return CURRENT_LOVE_STYLE_CARD
+
+
+def set_random_love_style_card() -> int:
+    if LOVE_STYLE_LOCKED:
+        return CURRENT_LOVE_STYLE_CARD
+    value = random.choice(LOVE_STYLE_OPTIONS)
+    return set_current_love_style_card(value, locked=False)
 
 
 def sanitize_arisa_reply(text: str) -> str:
