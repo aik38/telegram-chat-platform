@@ -143,6 +143,12 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\telegram-chat-platform
 - Arisa モードで未許可コマンド（例: `/read1` `/buy`）を安全にブロックし、ValueError を起こし得る `Command()`（引数なし）を排除。
 - Arisa の `/start` `/help` `/lang` `/language` `/status` `/store` は専用ハンドラで処理し、既存の default / LINE の挙動は変更しない。
 
+### Arisa Love Style Card（管理者切り替え）
+
+- Arisa の Love モードには、管理者が切り替え可能な Love Style Card 機構がある。
+- 切り替えは管理者コマンドのみで行い、一般ユーザーの操作や UI 変更は不要。
+- 詳細は `characters/arisa/README.md` を参照。
+
 ### Arisa コマンド制御の手動確認
 
 1. `.env.arisa.gemini` を用意して `scripts/run_arisa.ps1` を実行。
