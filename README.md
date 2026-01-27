@@ -151,6 +151,8 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\telegram-chat-platform
 4. `/status` `/store` で Store/Status が表示されることを確認。
 5. `/read1` `/buy` など未許可コマンドがブロック文言で返ることを確認。
 6. `scripts/run_tarot.ps1` で起動し、default の `/start` `/read1` が従来通り動作することを確認。
+7. `Arisa（admin-only）: `/love_style` で Love（romance）モードの Style Card を確認/変更できます（詳細は `characters/arisa/README.md`）。
+
 
 ### Arisa 収益化 v2（Stars + トークン課金）の簡易確認
 
