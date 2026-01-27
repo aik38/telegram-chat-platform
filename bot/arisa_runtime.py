@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from bot.arisa_prompts import build_system_prompt
+from bot.arisa_prompts import build_system_prompt, normalize_love_style
 from bot.texts.i18n import normalize_lang
 from core.prompts import get_consult_system_prompt
 
@@ -15,9 +15,7 @@ ARISA_DEFAULT_TEMPERATURE = 0.72
 ARISA_DEFAULT_TOP_P = 0.9
 ARISA_DEFAULT_PRESENCE = 0.2
 ARISA_DEFAULT_FREQUENCY = 0.15
-LOVE_STYLE_OPTIONS = (1, 2, 3)
-CURRENT_LOVE_STYLE_CARD = 1
-LOVE_STYLE_LOCKED = False
+LOVE_STYLE_OPTIONS = ("LOVE_A", "LOVE_B", "LOVE_C")
 
 _ARISA_DIR = Path(__file__).resolve().parents[1] / "characters" / "arisa"
 
@@ -46,26 +44,8 @@ def get_user_calling(*, paid: bool, known_name: str | None) -> str:
     return "あなた"
 
 
-def get_current_love_style_card() -> int:
-    return CURRENT_LOVE_STYLE_CARD
-
-
-def is_love_style_locked() -> bool:
-    return LOVE_STYLE_LOCKED
-
-
-def set_current_love_style_card(value: int, *, locked: bool = True) -> int:
-    global CURRENT_LOVE_STYLE_CARD, LOVE_STYLE_LOCKED
-    CURRENT_LOVE_STYLE_CARD = value
-    LOVE_STYLE_LOCKED = locked
-    return CURRENT_LOVE_STYLE_CARD
-
-
-def set_random_love_style_card() -> int:
-    if LOVE_STYLE_LOCKED:
-        return CURRENT_LOVE_STYLE_CARD
-    value = random.choice(LOVE_STYLE_OPTIONS)
-    return set_current_love_style_card(value, locked=False)
+def pick_random_love_style() -> str:
+    return random.choice(LOVE_STYLE_OPTIONS)
 
 
 def sanitize_arisa_reply(text: str) -> str:
@@ -177,6 +157,7 @@ def build_arisa_messages(
     first_paid_turn: bool = False,
     mode: str | None = None,
     calling: str = "あなた",
+    love_style: str | None = None,
 ) -> list[dict[str, str]]:
     """Arisaモードの system prompt を組み立てる。"""
     lang_code = normalize_lang(lang)
@@ -185,7 +166,7 @@ def build_arisa_messages(
             calling = "you"
         elif lang_code == "pt":
             calling = "você"
-    mode_prompt = build_system_prompt(mode, lang=lang_code)
+    mode_prompt = build_system_prompt(mode, lang=lang_code, love_style=love_style)
     system_prompt = (
         mode_prompt
         or _read_arisa_file(f"system_prompt.{lang_code}.txt")
@@ -205,7 +186,10 @@ def build_arisa_messages(
         f'CALLING: "{calling}"'
     )
     if mode == "romance":
-        internal_flags = f"{internal_flags}\nLOVE_STYLE_CARD={CURRENT_LOVE_STYLE_CARD}"
+        normalized_love_style = normalize_love_style(love_style)
+        internal_flags = (
+            f"{internal_flags}\nLOVE_STYLE={normalized_love_style or 'UNSET'}"
+        )
     parts = [system_prompt]
     if boundary_lines:
         parts.append(boundary_lines.strip())

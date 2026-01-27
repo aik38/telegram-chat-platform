@@ -89,6 +89,7 @@ from core.db import (
     set_last_general_chat_block_notice,
     set_arisa_trial_remaining,
     set_arisa_mode,
+    set_love_style,
     update_arisa_credits,
     update_arisa_pass,
     revoke_purchase,
@@ -129,11 +130,10 @@ from bot.arisa_runtime import (
     build_arisa_messages,
     get_arisa_fallback_message,
     get_user_calling,
-    is_love_style_locked,
+    pick_random_love_style,
     sanitize_arisa_reply,
-    set_current_love_style_card,
-    set_random_love_style_card,
 )
+from bot.arisa_prompts import normalize_love_style, select_romance_prompt
 from bot.paywall import (
     arisa_chat_allowed,
     arisa_sexy_unlocked,
@@ -413,9 +413,9 @@ ARISA_ALLOWED_COMMANDS = {
     "/love_c",
 }
 LOVE_STYLE_NAMES = {
-    1: "LOVE_A",
-    2: "LOVE_B",
-    3: "LOVE_C",
+    "LOVE_A": "LOVE_A",
+    "LOVE_B": "LOVE_B",
+    "LOVE_C": "LOVE_C",
 }
 ARISA_TAROT_KEYWORDS = (
     "占い",
@@ -4777,6 +4777,13 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
     provider = LLM_PROVIDER or infer_provider(get_openai_base_url())
     temperature, request_overrides = arisa_generation_params(provider=provider)
     arisa_mode = user.arisa_mode if user else None
+    love_style = user.love_style if user else None
+    love_style_section: str | None = None
+    if arisa_mode == "romance":
+        if not love_style:
+            love_style = pick_random_love_style()
+            set_love_style(user_id, love_style, now=now)
+        _, love_style_section = select_romance_prompt(love_style, lang=lang)
     _log_access_snapshot(
         user_id=user_id,
         is_admin=is_admin_user(user_id),
@@ -4789,6 +4796,9 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
         extra={
             "mode": "arisa",
             "user_id": user_id,
+            "arisa_mode": arisa_mode,
+            "love_style": normalize_love_style(love_style),
+            "love_style_section": love_style_section,
             "text_preview": _preview_text(user_query),
         },
     )
@@ -4799,14 +4809,30 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
 
     try:
         openai_start = perf_counter()
+        messages = build_arisa_messages(
+            user_query,
+            lang=lang,
+            paid=paid_user,
+            mode=arisa_mode,
+            calling=calling,
+            love_style=love_style,
+        )
+        system_header = "\n".join(
+            (messages[0]["content"] if messages else "").splitlines()[:20]
+        )
+        logger.info(
+            "Arisa system prompt header",
+            extra={
+                "mode": "arisa",
+                "user_id": user_id,
+                "arisa_mode": arisa_mode,
+                "love_style": normalize_love_style(love_style),
+                "love_style_section": love_style_section,
+                "system_prompt_header": _preview_text(system_header, limit=400),
+            },
+        )
         answer, fatal, token_usage = await call_openai_with_retry_and_usage(
-            build_arisa_messages(
-                user_query,
-                lang=lang,
-                paid=paid_user,
-                mode=arisa_mode,
-                calling=calling,
-            ),
+            messages,
             lang=lang,
             temperature=temperature,
             request_overrides=request_overrides,
@@ -4968,11 +4994,8 @@ async def arisa_cmd_love_variants(message: Message) -> None:
     if user_id is None:
         await message.answer(t(lang, "USER_INFO_MISSING"))
         return
-    if not is_admin_user(user_id):
-        await message.answer(_admin_only_message(lang))
-        return
     token = _extract_command_token(message.text or "") or ""
-    style_map = {"/love_a": 1, "/love_b": 2, "/love_c": 3}
+    style_map = {"/love_a": "LOVE_A", "/love_b": "LOVE_B", "/love_c": "LOVE_C"}
     style_value = style_map.get(token)
     if style_value is None:
         await message.answer(
@@ -4980,7 +5003,7 @@ async def arisa_cmd_love_variants(message: Message) -> None:
             reply_markup=build_arisa_menu(user_id),
         )
         return
-    set_current_love_style_card(style_value, locked=True)
+    set_love_style(user_id, style_value)
     style_name = LOVE_STYLE_NAMES.get(style_value, "不明")
     await message.answer(
         f"OK: Love style = {style_value} ({style_name})",
@@ -5260,8 +5283,9 @@ async def arisa_text(message: Message) -> None:
     if action == "love":
         if user_id is not None:
             set_arisa_mode(user_id, "romance", now=now)
-            if not is_love_style_locked():
-                set_random_love_style_card()
+            user = get_user_with_default(user_id, now=now) or ensure_user(user_id, now=now)
+            if not user.love_style:
+                set_love_style(user_id, pick_random_love_style(), now=now)
         await message.answer(
             get_arisa_prompt("ARISA_LOVE_PROMPTS", "ARISA_LOVE_PROMPT", lang=lang),
             reply_markup=build_arisa_menu(user_id),
