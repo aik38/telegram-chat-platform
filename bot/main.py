@@ -409,6 +409,16 @@ ARISA_ALLOWED_COMMANDS = {
     "/whoami",
     "/love_style",
 }
+LOVE_STYLE_NAMES = {
+    1: "小悪魔先輩",
+    2: "秘密の共犯",
+    3: "嫉妬独占",
+    4: "甘やかし監禁",
+    5: "氷の女王",
+    6: "保健室",
+    7: "夜の取り調べ",
+    8: "ご褒美と罰",
+}
 ARISA_TAROT_KEYWORDS = (
     "占い",
     "タロット",
@@ -4965,9 +4975,10 @@ async def arisa_cmd_love_style(message: Message) -> None:
         return
     parts = (message.text or "").strip().split()
     current_style = get_current_love_style_card()
+    current_name = LOVE_STYLE_NAMES.get(current_style, "不明")
     if len(parts) < 2:
         await message.answer(
-            f"使い方: /love_style <1-8>（現在: {current_style}）",
+            f"Love style: {current_style} ({current_name})",
             reply_markup=build_arisa_menu(user_id),
         )
         return
@@ -4975,19 +4986,20 @@ async def arisa_cmd_love_style(message: Message) -> None:
         style_value = int(parts[1])
     except ValueError:
         await message.answer(
-            "番号は1〜8で指定してください。",
+            "Usage: /love_style <1-8>  (or /love_style to show current)",
             reply_markup=build_arisa_menu(user_id),
         )
         return
     if not 1 <= style_value <= 8:
         await message.answer(
-            "番号は1〜8で指定してください。",
+            "Usage: /love_style <1-8>  (or /love_style to show current)",
             reply_markup=build_arisa_menu(user_id),
         )
         return
     set_current_love_style_card(style_value)
+    style_name = LOVE_STYLE_NAMES.get(style_value, "不明")
     await message.answer(
-        f"LOVE_STYLE_CARD を {style_value} に更新しました。",
+        f"OK: Love style = {style_value} ({style_name})",
         reply_markup=build_arisa_menu(user_id),
     )
 
