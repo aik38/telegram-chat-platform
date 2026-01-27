@@ -15,6 +15,7 @@ ARISA_DEFAULT_TEMPERATURE = 0.72
 ARISA_DEFAULT_TOP_P = 0.9
 ARISA_DEFAULT_PRESENCE = 0.2
 ARISA_DEFAULT_FREQUENCY = 0.15
+CURRENT_LOVE_STYLE_CARD = 1
 
 _ARISA_DIR = Path(__file__).resolve().parents[1] / "characters" / "arisa"
 
@@ -41,6 +42,16 @@ def get_user_calling(*, paid: bool, known_name: str | None) -> str:
         if cleaned:
             return f"{cleaned}さん"
     return "あなた"
+
+
+def get_current_love_style_card() -> int:
+    return CURRENT_LOVE_STYLE_CARD
+
+
+def set_current_love_style_card(value: int) -> int:
+    global CURRENT_LOVE_STYLE_CARD
+    CURRENT_LOVE_STYLE_CARD = value
+    return CURRENT_LOVE_STYLE_CARD
 
 
 def sanitize_arisa_reply(text: str) -> str:
@@ -179,6 +190,8 @@ def build_arisa_messages(
         f'ARISA_MODE: "{mode or "none"}"\n'
         f'CALLING: "{calling}"'
     )
+    if mode == "romance":
+        internal_flags = f"{internal_flags}\nLOVE_STYLE_CARD={CURRENT_LOVE_STYLE_CARD}"
     parts = [system_prompt]
     if boundary_lines:
         parts.append(boundary_lines.strip())

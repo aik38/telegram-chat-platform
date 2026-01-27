@@ -127,9 +127,11 @@ from core.store.catalog import Product, get_product, iter_products
 from bot.arisa_runtime import (
     arisa_generation_params,
     build_arisa_messages,
+    get_current_love_style_card,
     get_arisa_fallback_message,
     get_user_calling,
     sanitize_arisa_reply,
+    set_current_love_style_card,
 )
 from bot.paywall import (
     arisa_chat_allowed,
@@ -405,6 +407,7 @@ ARISA_ALLOWED_COMMANDS = {
     "/status",
     "/store",
     "/whoami",
+    "/love_style",
 }
 ARISA_TAROT_KEYWORDS = (
     "占い",
@@ -4946,6 +4949,47 @@ async def arisa_cmd_whoami(message: Message) -> None:
     now = utcnow()
     lines = _build_whoami_lines(user_id=user_id, lang=lang, now=now)
     await message.answer("\n".join(lines), reply_markup=build_arisa_menu(user_id))
+
+
+@arisa_router.message(Command("love_style"))
+async def arisa_cmd_love_style(message: Message) -> None:
+    if not _should_process_message(message, handler="arisa_love_style"):
+        return
+    user_id = message.from_user.id if message.from_user else None
+    lang = get_user_lang_or_default(user_id)
+    if user_id is None:
+        await message.answer(t(lang, "USER_INFO_MISSING"))
+        return
+    if not is_admin_user(user_id):
+        await message.answer(_admin_only_message(lang))
+        return
+    parts = (message.text or "").strip().split()
+    current_style = get_current_love_style_card()
+    if len(parts) < 2:
+        await message.answer(
+            f"使い方: /love_style <1-8>（現在: {current_style}）",
+            reply_markup=build_arisa_menu(user_id),
+        )
+        return
+    try:
+        style_value = int(parts[1])
+    except ValueError:
+        await message.answer(
+            "番号は1〜8で指定してください。",
+            reply_markup=build_arisa_menu(user_id),
+        )
+        return
+    if not 1 <= style_value <= 8:
+        await message.answer(
+            "番号は1〜8で指定してください。",
+            reply_markup=build_arisa_menu(user_id),
+        )
+        return
+    set_current_love_style_card(style_value)
+    await message.answer(
+        f"LOVE_STYLE_CARD を {style_value} に更新しました。",
+        reply_markup=build_arisa_menu(user_id),
+    )
 
 
 @arisa_router.callback_query(F.data.startswith("lang:set:"))
