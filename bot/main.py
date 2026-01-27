@@ -127,11 +127,12 @@ from core.store.catalog import Product, get_product, iter_products
 from bot.arisa_runtime import (
     arisa_generation_params,
     build_arisa_messages,
-    get_current_love_style_card,
     get_arisa_fallback_message,
     get_user_calling,
+    is_love_style_locked,
     sanitize_arisa_reply,
     set_current_love_style_card,
+    set_random_love_style_card,
 )
 from bot.paywall import (
     arisa_chat_allowed,
@@ -407,17 +408,14 @@ ARISA_ALLOWED_COMMANDS = {
     "/status",
     "/store",
     "/whoami",
-    "/love_style",
+    "/love_a",
+    "/love_b",
+    "/love_c",
 }
 LOVE_STYLE_NAMES = {
-    1: "小悪魔先輩",
-    2: "秘密の共犯",
-    3: "嫉妬独占",
-    4: "甘やかし監禁",
-    5: "氷の女王",
-    6: "保健室",
-    7: "夜の取り調べ",
-    8: "ご褒美と罰",
+    1: "LOVE_A",
+    2: "LOVE_B",
+    3: "LOVE_C",
 }
 ARISA_TAROT_KEYWORDS = (
     "占い",
@@ -4961,9 +4959,9 @@ async def arisa_cmd_whoami(message: Message) -> None:
     await message.answer("\n".join(lines), reply_markup=build_arisa_menu(user_id))
 
 
-@arisa_router.message(Command("love_style"))
-async def arisa_cmd_love_style(message: Message) -> None:
-    if not _should_process_message(message, handler="arisa_love_style"):
+@arisa_router.message(Command("love_a", "love_b", "love_c"))
+async def arisa_cmd_love_variants(message: Message) -> None:
+    if not _should_process_message(message, handler="arisa_love_variants"):
         return
     user_id = message.from_user.id if message.from_user else None
     lang = get_user_lang_or_default(user_id)
@@ -4973,30 +4971,16 @@ async def arisa_cmd_love_style(message: Message) -> None:
     if not is_admin_user(user_id):
         await message.answer(_admin_only_message(lang))
         return
-    parts = (message.text or "").strip().split()
-    current_style = get_current_love_style_card()
-    current_name = LOVE_STYLE_NAMES.get(current_style, "不明")
-    if len(parts) < 2:
+    token = _extract_command_token(message.text or "") or ""
+    style_map = {"/love_a": 1, "/love_b": 2, "/love_c": 3}
+    style_value = style_map.get(token)
+    if style_value is None:
         await message.answer(
-            f"Love style: {current_style} ({current_name})",
+            "Usage: /love_a | /love_b | /love_c",
             reply_markup=build_arisa_menu(user_id),
         )
         return
-    try:
-        style_value = int(parts[1])
-    except ValueError:
-        await message.answer(
-            "Usage: /love_style <1-8>  (or /love_style to show current)",
-            reply_markup=build_arisa_menu(user_id),
-        )
-        return
-    if not 1 <= style_value <= 8:
-        await message.answer(
-            "Usage: /love_style <1-8>  (or /love_style to show current)",
-            reply_markup=build_arisa_menu(user_id),
-        )
-        return
-    set_current_love_style_card(style_value)
+    set_current_love_style_card(style_value, locked=True)
     style_name = LOVE_STYLE_NAMES.get(style_value, "不明")
     await message.answer(
         f"OK: Love style = {style_value} ({style_name})",
@@ -5276,6 +5260,8 @@ async def arisa_text(message: Message) -> None:
     if action == "love":
         if user_id is not None:
             set_arisa_mode(user_id, "romance", now=now)
+            if not is_love_style_locked():
+                set_random_love_style_card()
         await message.answer(
             get_arisa_prompt("ARISA_LOVE_PROMPTS", "ARISA_LOVE_PROMPT", lang=lang),
             reply_markup=build_arisa_menu(user_id),
