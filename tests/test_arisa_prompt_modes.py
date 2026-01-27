@@ -63,18 +63,18 @@ def test_arisa_texts_avoid_choice_keywords() -> None:
 
 def test_arisa_mode_selection_changes_prompt() -> None:
     base = arisa_prompts.load_prompt("base")
-    romance = arisa_prompts.load_prompt("romance")
     sexy = arisa_prompts.load_prompt("sexy")
 
-    romance_prompt = arisa_prompts.build_system_prompt("romance")
+    romance_block, _ = arisa_prompts.select_romance_prompt("LOVE_A")
+    romance_prompt = arisa_prompts.build_system_prompt("romance", love_style="LOVE_A")
     assert base in romance_prompt
-    assert romance in romance_prompt
+    assert romance_block in romance_prompt
     assert sexy not in romance_prompt
 
     sexy_prompt = arisa_prompts.build_system_prompt("sexy")
     assert base in sexy_prompt
     assert sexy in sexy_prompt
-    assert romance not in sexy_prompt
+    assert romance_block not in sexy_prompt
 
 
 def test_arisa_default_prompt_uses_light_style() -> None:
