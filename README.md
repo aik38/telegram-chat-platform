@@ -95,7 +95,7 @@ PowerShell で **1コマンド** で Bot（aiogram）を起動する手順です
 
 1. リポジトリ直下に `.env.arisa.openai` もしくは `.env.arisa.gemini` を作成し、`TELEGRAM_BOT_TOKEN`, `OPENAI_API_KEY`, `SQLITE_DB_PATH`, `CHARACTER=arisa`, `PAYWALL_ENABLED` など必要な環境変数を設定します。
    - QA用に管理者テストをする場合は `.env.arisa.*` に `ADMIN_USER_IDS=123456789,987654321` のようにカンマ区切りで Telegram のユーザーIDを指定します。
-   - OpenRouter を使う場合は `.env.arisa.openrouter` を作成し、`OPENAI_BASE_URL=https://openrouter.ai/api/v1` と `OPENAI_MODEL=openrouter/auto` などを設定します。
+   - OpenRouter を使う場合は `.env.arisa.openrouter` を作成し、`OPENAI_BASE_URL=https://openrouter.ai/api/v1` と `OPENAI_MODEL=sao10k/l3.1-euryale-70b` を設定します（`openrouter/auto` は接続テスト用）。
 2. PowerShell で以下を実行します。
 
 ```powershell
