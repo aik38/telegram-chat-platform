@@ -28,12 +28,13 @@ pip install -r requirements.txt
 
 1. リポジトリ直下の `StartBots.cmd` をダブルクリックします。
 2. メニューでアプリ（LINE / Tarot / Arisa）を選択します。
-3. LLM（openai / gemini）を選択し、単独で起動します（同時起動はしません）。
+3. LLM（openai / gemini / openrouter）を選択し、単独で起動します（同時起動はしません）。
 
 - Provider 切替は `DOTENV_FILE` の切替だけで行います。
   - Tarot: `.env.gemini` / `.env.openai`
   - Arisa: `.env.arisa.gemini` / `.env.arisa.openai`
   - LINE: `.env.gemini` / `.env.openai`
+  - OpenRouter選択時: Tarot/LINE は `.env.openrouter`、Arisa は `.env.arisa.openrouter`
 - Tarot / Arisa は **Telegram Bot**、LINE は **API サーバー** です（Bot と API は別プロセス）。
 - すべて **ポート 8000 単独起動** が前提です（同時起動しません）。
 
@@ -84,6 +85,7 @@ PowerShell で **1コマンド** で Bot（aiogram）を起動する手順です
 
 1. リポジトリ直下に `.env.arisa.openai` もしくは `.env.arisa.gemini` を作成し、`TELEGRAM_BOT_TOKEN`, `OPENAI_API_KEY`, `SQLITE_DB_PATH`, `CHARACTER=arisa`, `PAYWALL_ENABLED` など必要な環境変数を設定します。
    - QA用に管理者テストをする場合は `.env.arisa.*` に `ADMIN_USER_IDS=123456789,987654321` のようにカンマ区切りで Telegram のユーザーIDを指定します。
+   - OpenRouter を使う場合は `.env.arisa.openrouter` を作成し、`OPENAI_BASE_URL=https://openrouter.ai/api/v1` と `OPENAI_MODEL=openrouter/auto` などを設定します。
 2. PowerShell で以下を実行します。
 
 ```powershell
@@ -96,12 +98,24 @@ powershell -ExecutionPolicy Bypass -File scripts/run_arisa.ps1 -DotenvFile .env.
 powershell -ExecutionPolicy Bypass -File scripts/run_tarot.ps1 -DotenvFile .env.gemini
 ```
 
+OpenRouter を使う場合:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_tarot.ps1 -DotenvFile .env.openrouter
+```
+
 ### LINE API サーバーを起動する
 
 **手動起動**
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/run_line.ps1 -DotenvFile .env.gemini -Port 8000
+```
+
+OpenRouter を使う場合:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_line.ps1 -DotenvFile .env.openrouter -Port 8000
 ```
 
 **どこからでも起動（PowerShell 7 / 絶対パス）**
