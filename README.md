@@ -31,11 +31,21 @@ pip install -r requirements.txt
 3. LLM（openai / gemini / openrouter）を選択し、単独で起動します（同時起動はしません）。
 
 - Provider 切替は `DOTENV_FILE` の切替だけで行います。
-  - Tarot: `.env.gemini` / `.env.openai`
-  - Arisa: `.env.arisa.gemini` / `.env.arisa.openai`
-  - LINE: `.env.gemini` / `.env.openai`
-  - OpenRouter選択時: Tarot/LINE は `.env.openrouter`、Arisa は `.env.arisa.openrouter`
 - Tarot / Arisa は **Telegram Bot**、LINE は **API サーバー** です（Bot と API は別プロセス）。
+
+#### StartBots 対応表（Bot × LLM → env）
+
+| Bot | LLM | DOTENV_FILE |
+|---|---|---|
+| tarot | openai | `.env.openai` |
+| tarot | gemini | `.env.gemini` |
+| tarot | openrouter | `.env.openrouter` |
+| line | openai | `.env.openai` |
+| line | gemini | `.env.gemini` |
+| line | openrouter | `.env.openrouter` |
+| arisa | openai | `.env.arisa.openai` |
+| arisa | gemini | `.env.arisa.gemini` |
+| arisa | openrouter | `.env.arisa.openrouter` |
 - すべて **ポート 8000 単独起動** が前提です（同時起動しません）。
 
 ### 手動起動（PowerShell）
@@ -181,21 +191,43 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\telegram-chat-platform
 
 ### 主な環境変数
 
-- `.env.example` を `.env` にコピーして値を埋めてください。
-- `SUPPORT_EMAIL`: 利用規約やサポート案内に表示するメールアドレス。未設定時は `hasegawaarisa1@gmail.com` が使われますが、ダミー表記を避けるため環境変数で上書きする運用を推奨します。
-- `OPENAI_BASE_URL`: OpenAI互換APIのエンドポイント。未設定/空の場合は従来通りOpenAIへ接続します。
-  - 例: Gemini (OpenAI互換) `https://generativelanguage.googleapis.com/v1beta/openai/`
-  - 例: DeepSeek (OpenAI互換) `https://api.deepseek.com/v1`
-- `OPENAI_MODEL` / `LINE_OPENAI_MODEL`: 接続先に合わせてモデルIDの変更が必要です。
-- `THROTTLE_MESSAGE_INTERVAL_SEC` / `THROTTLE_CALLBACK_INTERVAL_SEC`: テキスト送信・ボタン連打それぞれの最小間隔（秒）。未設定時は 1.2s / 0.8s のままです。負荷試験時に環境変数で調整してください。
-- LINE Webhook 用（LINE Messaging APIを利用する場合）
-  - `LINE_CHANNEL_SECRET`: チャネルシークレット。署名検証に使用します。
-  - `LINE_CHANNEL_ACCESS_TOKEN`: チャネルアクセストークン。LINE返信APIを呼ぶ際に使用します。
-  - `LINE_ADMIN_USER_IDS`: 管理者だけが「今日の星」「ミニ占い」を実行できます。カンマ区切りで指定。
-  - `LINE_FREE_MESSAGES_PER_MONTH`: 一般ユーザーの月間無料メッセージ上限。未設定時は 30 回/月。
-  - `LINE_VERIFY_SIGNATURE`: 署名検証の ON/OFF（デフォルトは `true`。開発でのみ OFF を想定）。
-  - `PRINCE_SYSTEM_PROMPT`: 「星の王子さま」人格のシステムプロンプト上書き用。未設定時はデフォルトの短め日本語プロンプトを利用。
-  - `LINE_OPENAI_MODEL`: LINE返信用の OpenAI モデル指定（デフォルト `gpt-4o-mini`）。
+- `.env.example` には次の2テンプレートを記載しています。
+  - **Template A**: Tarot / LINE 共通env（`.env.openai` / `.env.gemini` / `.env.openrouter`）
+  - **Template B**: Arisa専用env（`.env.arisa.openai` / `.env.arisa.gemini` / `.env.arisa.openrouter`）
+- 並び順は両テンプレートとも統一しています。
+  1. App / Telegram
+  2. Database
+  3. Monetization
+  4. LLM
+  5. LINE Prince
+
+- **App / Telegram**
+  - `TELEGRAM_BOT_TOKEN`: Telegram Botトークン。
+  - `SUPPORT_EMAIL`: 利用規約やサポート案内に表示するメールアドレス。未設定時は `hasegawaarisa1@gmail.com`。
+  - `CHARACTER`: Arisaを使う場合は `arisa`。
+  - `THROTTLE_MESSAGE_INTERVAL_SEC` / `THROTTLE_CALLBACK_INTERVAL_SEC`: 送信間隔制御（未設定時 1.2s / 0.8s）。
+- **Database**
+  - `SQLITE_DB_PATH`: SQLiteファイルパス。
+- **Monetization**
+  - `PAYWALL_ENABLED`: **未設定時は `false` 扱い**。課金制御を有効化する場合は `PAYWALL_ENABLED=true` を明示してください。
+  - Arisa は課金導線前提のため `PAYWALL_ENABLED=true` を推奨します。
+  - `ONE_MESSAGE_TOKENS` / `TRIAL_FREE_CREDITS` / `PASS_7D_DAILY_LIMIT` / `PASS_30D_DAILY_LIMIT`: 利用枠の制御パラメータ。
+- **LLM**
+  - `OPENAI_API_KEY`: OpenAI互換APIキー（OpenAI / Gemini / OpenRouter 共通で利用）。
+  - `OPENAI_BASE_URL`: OpenAI互換エンドポイント。未設定/空はOpenAIを使用。
+  - `OPENAI_MODEL` / `LINE_OPENAI_MODEL`: 接続先に合わせたモデルID。
+  - OpenRouterの注意:
+    - `openrouter/auto` は接続テスト用です。
+    - Arisa は固定モデル `sao10k/l3.1-euryale-70b` を推奨。
+    - Tarot / LINE は固定モデル `nousresearch/hermes-3-llama-3.1-70b` を推奨。
+- **LINE Prince**（LINE Messaging APIを利用する場合）
+  - `LINE_CHANNEL_SECRET`: 署名検証用シークレット。
+  - `LINE_CHANNEL_ACCESS_TOKEN`: LINE返信API用トークン。
+  - `LINE_ADMIN_USER_IDS`: 管理者ユーザーID（カンマ区切り）。
+  - `LINE_FREE_MESSAGES_PER_MONTH`: 月間無料メッセージ上限（未設定時 30）。
+  - `LINE_VERIFY_SIGNATURE`: 署名検証ON/OFF（デフォルト `true`）。
+  - `PRINCE_SYSTEM_PROMPT`: 星の王子さま人格のシステムプロンプト上書き。
+  - `LINE_OPENAI_MODEL`: LINE返信用モデル（デフォルト `gpt-4o-mini`）。
 
 ### シークレット運用ルール
 
@@ -408,16 +440,19 @@ powershell -ExecutionPolicy Bypass -File scripts/run_tarot.ps1
 - その後ダブルクリック起動でOK（起動中なら停止してから切替）
 - `.env` に同じキー（OPENAI_BASE_URL 等）を複数回書かないでください
 
-## Windows起動の切替確認（.envを触らずに6パターン）
+## Windows起動の切替確認（.envを触らずに9パターン）
 
 `.env` を上書きせずに `DOTENV_FILE` で切替できることを確認する手順です。`StartBots.cmd` を使い、各組み合わせを都度選択して起動します。起動中のプロセスは必ず停止してから次へ進めてください。
 
 1. Tarot (OpenAI): StartBots.cmd → Bot=tarot / LLM=openai を選択 → 起動ログで `DOTENV_FILE=.env.openai` を確認。
 2. Tarot (Gemini): StartBots.cmd → Bot=tarot / LLM=gemini を選択 → 起動ログで `DOTENV_FILE=.env.gemini` を確認。
-3. Arisa (OpenAI): StartBots.cmd → Bot=arisa / LLM=openai を選択 → 起動ログで `DOTENV_FILE=.env.arisa.openai` を確認。
-4. Arisa (Gemini): StartBots.cmd → Bot=arisa / LLM=gemini を選択 → 起動ログで `DOTENV_FILE=.env.arisa.gemini` を確認。
-5. LINE (OpenAI): StartBots.cmd → Bot=line / LLM=openai を選択 → 起動ログで `DOTENV_FILE=.env.openai` を確認。
-6. LINE (Gemini): StartBots.cmd → Bot=line / LLM=gemini を選択 → 起動ログで `DOTENV_FILE=.env.gemini` を確認。
+3. Tarot (OpenRouter): StartBots.cmd → Bot=tarot / LLM=openrouter を選択 → 起動ログで `DOTENV_FILE=.env.openrouter` を確認。
+4. Arisa (OpenAI): StartBots.cmd → Bot=arisa / LLM=openai を選択 → 起動ログで `DOTENV_FILE=.env.arisa.openai` を確認。
+5. Arisa (Gemini): StartBots.cmd → Bot=arisa / LLM=gemini を選択 → 起動ログで `DOTENV_FILE=.env.arisa.gemini` を確認。
+6. Arisa (OpenRouter): StartBots.cmd → Bot=arisa / LLM=openrouter を選択 → 起動ログで `DOTENV_FILE=.env.arisa.openrouter` を確認。
+7. LINE (OpenAI): StartBots.cmd → Bot=line / LLM=openai を選択 → 起動ログで `DOTENV_FILE=.env.openai` を確認。
+8. LINE (Gemini): StartBots.cmd → Bot=line / LLM=gemini を選択 → 起動ログで `DOTENV_FILE=.env.gemini` を確認。
+9. LINE (OpenRouter): StartBots.cmd → Bot=line / LLM=openrouter を選択 → 起動ログで `DOTENV_FILE=.env.openrouter` を確認。
 
 ## GitHubでmainにマージ後、ローカルへ反映する（Windows / PowerShell）
 
