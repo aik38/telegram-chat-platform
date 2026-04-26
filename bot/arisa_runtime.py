@@ -18,6 +18,23 @@ ARISA_DEFAULT_FREQUENCY = 0.15
 LOVE_STYLE_OPTIONS = ("LOVE_A", "LOVE_B", "LOVE_C")
 
 _ARISA_DIR = Path(__file__).resolve().parents[1] / "characters" / "arisa"
+_PROMPT_LEAK_MARKERS = (
+    "Arisa Style Guide",
+    "## 返信の型",
+    "## ルール",
+    "## OK例",
+    "## NG例",
+    "MODE:",
+    "FIRST_PAID_TURN:",
+    "FIRSTPAIDTURN:",
+    "LANG:",
+    "ARISA_MODE:",
+    "ARISAMODE:",
+    "CALLING:",
+    "LOVE_STYLE:",
+    "LOVESTYLE:",
+)
+_NON_JA_HEAVY_SCRIPT_RE = re.compile(r"[\u0900-\u097f\u0400-\u04ff\u0590-\u05ff\u0600-\u06ff]")
 
 
 @lru_cache(maxsize=4)
@@ -48,9 +65,48 @@ def pick_random_love_style() -> str:
     return random.choice(LOVE_STYLE_OPTIONS)
 
 
-def sanitize_arisa_reply(text: str) -> str:
+def _contains_prompt_leak_markers(text: str) -> bool:
+    lowered = text.lower()
+    return any(marker.lower() in lowered for marker in _PROMPT_LEAK_MARKERS)
+
+
+def _is_language_broken_for_ja(text: str) -> bool:
+    meaningful = [ch for ch in text if not ch.isspace()]
+    if not meaningful:
+        return False
+    ja_like = sum(1 for ch in meaningful if "\u3040" <= ch <= "\u30ff" or "\u4e00" <= ch <= "\u9faf")
+    non_ja_heavy = len(_NON_JA_HEAVY_SCRIPT_RE.findall(text))
+    return ja_like / len(meaningful) < 0.15 and non_ja_heavy >= 4
+
+
+def sanitize_arisa_reply(
+    text: str,
+    *,
+    lang: str | None = "ja",
+    calling: str = "あなた",
+    user_id: int | None = None,
+    message_id: int | None = None,
+    update_id: int | None = None,
+) -> str:
     if not text:
         return ""
+    lang_code = normalize_lang(lang)
+    if _contains_prompt_leak_markers(text):
+        return get_arisa_fallback_message(
+            lang=lang_code,
+            calling=calling,
+            user_id=user_id,
+            message_id=message_id,
+            update_id=update_id,
+        )
+    if lang_code == "ja" and _is_language_broken_for_ja(text):
+        return get_arisa_fallback_message(
+            lang=lang_code,
+            calling=calling,
+            user_id=user_id,
+            message_id=message_id,
+            update_id=update_id,
+        )
     sanitized = re.sub(r"[`*_~]", "", text)
     sanitized = sanitized.replace("【", "").replace("】", "")
     sanitized = sanitized.replace("[", "").replace("]", "")

@@ -4848,7 +4848,13 @@ async def handle_arisa_chat(message: Message, user_query: str) -> None:
                 reply_markup=build_arisa_menu(user_id),
             )
             return
-        answer = sanitize_arisa_reply(answer)
+        answer = sanitize_arisa_reply(
+            answer,
+            lang=lang,
+            calling=calling,
+            user_id=user_id,
+            message_id=getattr(message, "message_id", None),
+        )
         credits_used = _arisa_credits_used(token_usage)
         if arisa_should_consume_credits(user_id, admin_override=admin_mode):
             credit_sources, credit_shortfall = _consume_arisa_credits(
