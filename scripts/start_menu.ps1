@@ -33,12 +33,31 @@ $app = Read-Choice -Prompt "Select app" -Options @{
 $provider = Read-Choice -Prompt "Select LLM" -Options @{
     "1" = "openai"
     "2" = "gemini"
+    "3" = "openrouter"
 }
 
 switch ($app) {
-    "arisa" { $dotenvFile = ".env.arisa.$provider" }
-    "line" { $dotenvFile = ".env.$provider" }
-    "tarot" { $dotenvFile = ".env.$provider" }
+    "arisa" {
+        if ($provider -eq "openrouter") {
+            $dotenvFile = ".env.arisa.openrouter"
+        } else {
+            $dotenvFile = ".env.arisa.$provider"
+        }
+    }
+    "line" {
+        if ($provider -eq "openrouter") {
+            $dotenvFile = ".env.openrouter"
+        } else {
+            $dotenvFile = ".env.$provider"
+        }
+    }
+    "tarot" {
+        if ($provider -eq "openrouter") {
+            $dotenvFile = ".env.openrouter"
+        } else {
+            $dotenvFile = ".env.$provider"
+        }
+    }
 }
 
 $env:DOTENV_FILE = $dotenvFile

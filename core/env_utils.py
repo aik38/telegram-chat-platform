@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 _GEMINI_HOST = "generativelanguage.googleapis.com"
 _OPENAI_HOST = "api.openai.com"
+_OPENROUTER_HOST = "openrouter.ai"
 
 
 def resolve_dotenv_path() -> Path:
@@ -55,6 +56,8 @@ def infer_provider(base_url: str | None) -> str:
     if not base_url:
         return "openai"
     base_url_lower = base_url.lower()
+    if _OPENROUTER_HOST in base_url_lower:
+        return "openrouter"
     if _GEMINI_HOST in base_url_lower:
         return "gemini"
     if _OPENAI_HOST in base_url_lower:
